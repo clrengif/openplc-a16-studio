@@ -6,7 +6,7 @@ import {
   ChevronRight,
   ChevronDown,
   Search,
-  PanelLeftClose,
+  X,
 } from 'lucide-react';
 import { usePLCStore } from '../store/usePLCStore';
 import { LadderElementType } from '../types/plc';
@@ -130,17 +130,17 @@ export const LeftLibrarySidebar: React.FC<LeftLibrarySidebarProps> = ({ width, o
       style={{ width }}
       className="shrink-0 h-full bg-[#f4f6f8] flex flex-col select-none overflow-hidden"
     >
-      {/* Header with Close Button */}
+      {/* Header with Close X Button */}
       <div className="px-2.5 py-1.5 bg-[#eef2f6] border-b border-slate-300 flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
-          Librería IEC 61131-3
+          Librería de Bloques
         </span>
         <button
           onClick={onClose}
-          title="Cerrar panel izquierdo"
-          className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer"
+          title="Cerrar ventana de librería (Activar en menú Ver)"
+          className="p-1 rounded hover:bg-rose-100 text-slate-500 hover:text-rose-700 cursor-pointer transition-colors"
         >
-          <PanelLeftClose className="w-3.5 h-3.5" />
+          <X className="w-3.5 h-3.5" />
         </button>
       </div>
 

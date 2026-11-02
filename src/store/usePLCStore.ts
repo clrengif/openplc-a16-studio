@@ -33,8 +33,10 @@ import {
   executeModbusRTUTransaction,
   executeModbusTCPTransaction,
 } from '../utils/industrialNetworks';
+import { PlnoProjectFile } from '../utils/plcExamples';
 
 interface PLCStoreState {
+  projectFileName: string;
   workspaceView: WorkspaceView;
   language: PLCLanguage;
   activeSheet: number;
@@ -78,6 +80,10 @@ interface PLCStoreState {
   hwConnected: boolean;
 
   // Actions
+  setProjectFileName: (name: string) => void;
+  loadPlnoProject: (proj: PlnoProjectFile) => void;
+  newBlankProject: () => void;
+  exportPlnoString: () => string;
   setWorkspaceView: (view: WorkspaceView) => void;
   setLanguage: (lang: PLCLanguage) => void;
   setActiveSheet: (sheet: number) => void;
@@ -168,6 +174,7 @@ const createSeedOscSamples = (): OscilloscopeSample[] => {
 };
 
 export const usePLCStore = create<PLCStoreState>((set, get) => ({
+  projectFileName: 'planta_kc868.plno',
   workspaceView: 'schematic',
   language: 'LD',
   activeSheet: 0, // 0 = Todas las hojas, 1..3 = Hoja específica
@@ -233,6 +240,73 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
     pcfOut2Addr: '0x25',
   },
   hwConnected: false,
+
+  setProjectFileName: (name) =>
+    set({ projectFileName: name.endsWith('.plno') ? name : `${name}.plno` }),
+
+  loadPlnoProject: (proj) => {
+    get().resetMemory();
+    set({
+      projectFileName: proj.fileName.endsWith('.plno')
+        ? proj.fileName
+        : `${proj.fileName}.plno`,
+      language: proj.language || 'LD',
+      activeSheet: 0,
+      rungs: proj.rungs,
+      stCode: proj.stCode,
+      symbols: proj.symbols || DEFAULT_SYMBOLS,
+      selectedRungId: proj.rungs[0]?.id ?? null,
+      selectedElementId: null,
+      workspaceView: 'schematic',
+    });
+    get().addLog(
+      'INFO',
+      `Proyecto cargado: "${proj.title}" (${proj.fileName}) — ${proj.description}`
+    );
+  },
+
+  newBlankProject: () => {
+    get().resetMemory();
+    const blankRung: LadderRung = {
+      id: `rung-${Date.now()}`,
+      number: 1,
+      sheet: 1,
+      comment: 'Red 1: Nuevo circuito de control',
+      elements: [
+        { id: `el-${Date.now()}-1`, type: 'NO', variable: '%IX0.0', label: 'START_BTN' },
+        { id: `el-${Date.now()}-2`, type: 'COIL', variable: '%QX0.0', label: 'MAIN_CONTACTOR' },
+      ],
+    };
+    set({
+      projectFileName: 'nuevo_proyecto.plno',
+      language: 'LD',
+      activeSheet: 0,
+      rungs: [blankRung],
+      stCode: `PROGRAM Nuevo_Proyecto\nVAR\n  START_BTN AT %IX0.0 : BOOL;\n  MAIN_CONTACTOR AT %QX0.0 : BOOL;\nEND_VAR\n\n%QX0.0 := %IX0.0;\n\nEND_PROGRAM`,
+      selectedRungId: blankRung.id,
+      selectedElementId: null,
+      workspaceView: 'schematic',
+    });
+    get().addLog('INFO', 'Proyecto cerrado / reiniciado a nuevo_proyecto.plno.');
+  },
+
+  exportPlnoString: () => {
+    const s = get();
+    const payload: PlnoProjectFile = {
+      format: 'PCLINO_PROJECT',
+      version: '1.0',
+      fileName: s.projectFileName,
+      title: s.projectFileName.replace(/\.plno$/i, ''),
+      category: 'Usuario',
+      description: 'Proyecto guardado desde PCLino Studio',
+      language: s.language,
+      rungs: s.rungs,
+      stCode: s.stCode,
+      symbols: s.symbols,
+      hwConfig: s.hwConfig,
+    };
+    return JSON.stringify(payload, null, 2);
+  },
 
   setWorkspaceView: (view) => set({ workspaceView: view }),
 

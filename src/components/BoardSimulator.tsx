@@ -10,7 +10,7 @@ import {
   Activity,
   Unplug,
   Thermometer,
-  PanelRightClose,
+  X,
 } from 'lucide-react';
 import { usePLCStore } from '../store/usePLCStore';
 import { indexToIECAddress } from '../utils/defaultProgram';
@@ -164,10 +164,10 @@ export const BoardSimulator: React.FC<BoardSimulatorProps> = ({ onClose }) => {
           {onClose && (
             <button
               onClick={onClose}
-              title="Cerrar panel de placa KC868-A16"
-              className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer ml-0.5"
+              title="Cerrar ventana de placa KC868-A16 (Activar en menú Ver)"
+              className="p-1 rounded hover:bg-rose-100 text-slate-500 hover:text-rose-700 cursor-pointer ml-0.5 transition-colors"
             >
-              <PanelRightClose className="w-4 h-4" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>

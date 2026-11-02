@@ -7,7 +7,7 @@ import {
   Unlock,
   Plus,
   Trash2,
-  PanelBottomClose,
+  X,
 } from 'lucide-react';
 import { usePLCStore } from '../store/usePLCStore';
 import { iecAddressToIndex } from '../utils/defaultProgram';
@@ -141,10 +141,10 @@ export const BottomConsole: React.FC<BottomConsoleProps> = ({ height, onClose })
 
           <button
             onClick={onClose}
-            title="Cerrar panel inferior"
-            className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer ml-1"
+            title="Cerrar ventana de mensajes y logs (Activar en menú Ver)"
+            className="p-1 rounded hover:bg-rose-100 text-slate-500 hover:text-rose-700 cursor-pointer ml-1 transition-colors"
           >
-            <PanelBottomClose className="w-4 h-4" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       </div>
