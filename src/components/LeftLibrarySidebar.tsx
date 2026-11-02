@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import {
   MousePointer,
   GitBranch,
-  Activity,
   Trash2,
   ChevronRight,
   ChevronDown,
   Search,
+  PanelLeftClose,
 } from 'lucide-react';
 import { usePLCStore } from '../store/usePLCStore';
 import { LadderElementType } from '../types/plc';
@@ -90,7 +90,12 @@ const CATEGORIES: LibraryCategory[] = [
   },
 ];
 
-export const LeftLibrarySidebar: React.FC = () => {
+interface LeftLibrarySidebarProps {
+  width: number;
+  onClose: () => void;
+}
+
+export const LeftLibrarySidebar: React.FC<LeftLibrarySidebarProps> = ({ width, onClose }) => {
   const {
     rungs,
     selectedRungId,
@@ -98,7 +103,6 @@ export const LeftLibrarySidebar: React.FC = () => {
     addElementToRung,
     toggleParallelBranch,
     deleteElement,
-    toggleProbe,
     setWorkspaceView,
     sendModbusTCPRequest,
     sendModbusRTURequest,
@@ -122,9 +126,26 @@ export const LeftLibrarySidebar: React.FC = () => {
     setOpenCats((prev) => ({ ...prev, [id]: !prev[id] }));
 
   return (
-    <aside className="w-60 shrink-0 h-full bg-[#f4f6f8] border-r border-slate-300 flex flex-col select-none">
-      {/* Simulino-style 4 Top Tool Buttons */}
-      <div className="p-2 grid grid-cols-4 gap-1.5 border-b border-slate-200 bg-[#f8fafc]">
+    <aside
+      style={{ width }}
+      className="shrink-0 h-full bg-[#f4f6f8] flex flex-col select-none overflow-hidden"
+    >
+      {/* Header with Close Button */}
+      <div className="px-2.5 py-1.5 bg-[#eef2f6] border-b border-slate-300 flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+          Librería IEC 61131-3
+        </span>
+        <button
+          onClick={onClose}
+          title="Cerrar panel izquierdo"
+          className="p-1 rounded hover:bg-slate-200 text-slate-500 hover:text-slate-800 cursor-pointer"
+        >
+          <PanelLeftClose className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* 3 Top Tool Buttons */}
+      <div className="p-2 grid grid-cols-3 gap-1.5 border-b border-slate-200 bg-[#f8fafc]">
         <button
           onClick={() => setWorkspaceView('schematic')}
           className="flex flex-col items-center justify-center py-1.5 px-1 rounded border border-[#0f766e] bg-[#ccfbf1]/50 text-[#0f766e] text-[11px] font-medium cursor-pointer"
@@ -141,15 +162,6 @@ export const LeftLibrarySidebar: React.FC = () => {
         >
           <GitBranch className="w-4 h-4 mb-0.5 text-slate-600" />
           <span>Rama OR</span>
-        </button>
-
-        <button
-          onClick={() => toggleProbe('%QX0.0')}
-          className="flex flex-col items-center justify-center py-1.5 px-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-medium cursor-pointer"
-          title="Conmutar sonda en el Osciloscopio PLC"
-        >
-          <Activity className="w-4 h-4 mb-0.5 text-slate-600" />
-          <span>Sonda</span>
         </button>
 
         <button
@@ -199,13 +211,13 @@ export const LeftLibrarySidebar: React.FC = () => {
                 onClick={() => toggleCat(cat.id)}
                 className="w-full px-3 py-2 flex items-center justify-between text-xs font-semibold text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
               >
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5 truncate">
                   {isOpen ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   )}
-                  {cat.title}
+                  <span className="truncate">{cat.title}</span>
                 </span>
                 <span className="text-[11px] font-normal text-slate-500">{filtered.length}</span>
               </button>
@@ -244,13 +256,13 @@ export const LeftLibrarySidebar: React.FC = () => {
             onClick={() => toggleCat('networks')}
             className="w-full px-3 py-2 flex items-center justify-between text-xs font-semibold text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
           >
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1.5 truncate">
               {openCats.networks ? (
-                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               ) : (
-                <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               )}
-              Redes Industriales KC868
+              <span className="truncate">Redes Industriales KC868</span>
             </span>
             <span className="text-[11px] font-normal text-slate-500">4</span>
           </button>

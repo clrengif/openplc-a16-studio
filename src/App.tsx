@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Cpu,
   Settings,
   X,
   Plus,
+  PanelLeftOpen,
+  PanelRightOpen,
+  PanelBottomOpen,
 } from 'lucide-react';
 import { usePLCStore } from './store/usePLCStore';
 import { LeftLibrarySidebar } from './components/LeftLibrarySidebar';
@@ -23,6 +26,7 @@ export const App: React.FC = () => {
     scanFreq,
     scanCount,
     lastScanUs,
+    logs,
     setWorkspaceView,
     setLanguage,
     setRunning,
@@ -34,7 +38,18 @@ export const App: React.FC = () => {
   } = usePLCStore();
 
   const [showExportModal, setShowExportModal] = useState(false);
+
+  // Panel visibility states
+  const [showLeftSidebar, setShowLeftSidebar] = useState(true);
   const [showRightBoardDock, setShowRightBoardDock] = useState(true);
+  const [showBottomConsole, setShowBottomConsole] = useState(true);
+
+  // Panel dimensions (resizable via drag handles)
+  const [leftWidth, setLeftWidth] = useState(248);
+  const [rightWidth, setRightWidth] = useState(390);
+  const [bottomHeight, setBottomHeight] = useState(215);
+
+  const draggingRef = useRef<'left' | 'right' | 'bottom' | null>(null);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -45,9 +60,38 @@ export const App: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [isRunning, scanFreq, stepSingleScan]);
 
+  // Global mouse move / up listeners for smooth panel resizing
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      if (draggingRef.current === 'left') {
+        const nextW = Math.max(180, Math.min(450, e.clientX));
+        setLeftWidth(nextW);
+      } else if (draggingRef.current === 'right') {
+        const nextW = Math.max(280, Math.min(620, window.innerWidth - e.clientX));
+        setRightWidth(nextW);
+      } else if (draggingRef.current === 'bottom') {
+        const nextH = Math.max(96, Math.min(500, window.innerHeight - e.clientY));
+        setBottomHeight(nextH);
+      }
+    };
+
+    const onMouseUp = () => {
+      draggingRef.current = null;
+      document.body.style.cursor = '';
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#f4f6f8] text-slate-800 overflow-hidden select-none">
-      {/* Row 1: Simulino-style Clean Light Top Bar */}
+      {/* Row 1: Top Bar */}
       <header className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 bg-[#f1f5f9] border-b border-slate-300">
         {/* Left: Brand + Desktop Menu Items */}
         <div className="flex items-center gap-4">
@@ -74,10 +118,15 @@ export const App: React.FC = () => {
               Editar
             </button>
             <button
-              onClick={() => setShowRightBoardDock(!showRightBoardDock)}
+              onClick={() => {
+                setShowLeftSidebar(true);
+                setShowRightBoardDock(true);
+                setShowBottomConsole(true);
+              }}
+              title="Restaurar todos los paneles"
               className="hover:text-[#0f766e] cursor-pointer"
             >
-              Ver
+              Ver Todo
             </button>
             <button
               onClick={() => setRunning(!isRunning)}
@@ -100,9 +149,8 @@ export const App: React.FC = () => {
           </nav>
         </div>
 
-        {/* Center/Right: Segmented View Switcher + File Label + Simular CTA (Simulino exact layout) */}
+        {/* Center/Right: Segmented View Switcher + Simular CTA */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Segmented View Pill */}
           <div className="flex items-center bg-white rounded-md border border-slate-300 p-0.5 shadow-2xs">
             <button
               onClick={() => setWorkspaceView('schematic')}
@@ -140,7 +188,6 @@ export const App: React.FC = () => {
             kincony_a16.plc
           </span>
 
-          {/* Primary Simular / Detener Button */}
           <button
             onClick={() => setRunning(!isRunning)}
             className={`px-4 py-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer shadow-2xs ${
@@ -162,7 +209,6 @@ export const App: React.FC = () => {
             Calcular / Paso
           </button>
 
-          {/* Language Selector Dropdown */}
           <select
             value={language}
             onChange={(e) => {
@@ -185,9 +231,19 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Row 2: Simulino-style Parameters & Status Sub-bar */}
+      {/* Row 2: Parameters & Panel Toggle Sub-bar */}
       <div className="flex items-center justify-between px-3.5 py-1.5 bg-[#f8fafc] border-b border-slate-300 text-xs">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          {!showLeftSidebar && (
+            <button
+              onClick={() => setShowLeftSidebar(true)}
+              className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-medium flex items-center gap-1 cursor-pointer"
+            >
+              <PanelLeftOpen className="w-3.5 h-3.5 text-[#0f766e]" />
+              <span>Abrir Librería</span>
+            </button>
+          )}
+
           <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
             <span>FRECUENCIA SCAN</span>
             <select
@@ -200,13 +256,6 @@ export const App: React.FC = () => {
               <option value={50}>50 Hz (20 ms)</option>
               <option value={100}>100 Hz (10 ms)</option>
             </select>
-          </label>
-
-          <label className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            <span>VELOCIDAD</span>
-            <span className="px-2.5 py-0.5 rounded bg-white border border-slate-300 font-sans font-medium text-xs text-slate-800 normal-case">
-              Tiempo real
-            </span>
           </label>
 
           <button
@@ -224,14 +273,26 @@ export const App: React.FC = () => {
           </button>
         </div>
 
-        <div className="font-mono text-xs text-slate-600">
-          {isRunning
-            ? `Simulación en curso (${scanFreq} Hz · Scan #${scanCount} · ${lastScanUs} µs)`
-            : 'Simulación detenida.'}
+        <div className="flex items-center gap-3">
+          <div className="font-mono text-xs text-slate-600">
+            {isRunning
+              ? `Simulación en curso (${scanFreq} Hz · Scan #${scanCount} · ${lastScanUs} µs)`
+              : 'Simulación detenida.'}
+          </div>
+
+          {workspaceView === 'schematic' && !showRightBoardDock && (
+            <button
+              onClick={() => setShowRightBoardDock(true)}
+              className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-medium flex items-center gap-1 cursor-pointer"
+            >
+              <PanelRightOpen className="w-3.5 h-3.5 text-[#0f766e]" />
+              <span>Abrir Placa KC868-A16</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Row 3: Document Tab Strip (like Simulino's "Potencia: fusible ante un co... x | +") */}
+      {/* Row 3: Document Tab Strip */}
       <div className="flex items-center justify-between px-2 pt-1.5 bg-[#e9eef2] border-b border-slate-300 text-xs">
         <div className="flex items-center gap-1">
           <div className="px-3 py-1.5 rounded-t-md bg-white border-t border-x border-slate-300 font-medium text-slate-800 flex items-center gap-2 -mb-px">
@@ -255,22 +316,43 @@ export const App: React.FC = () => {
           </button>
         </div>
 
-        {workspaceView === 'schematic' && (
-          <button
-            onClick={() => setShowRightBoardDock(!showRightBoardDock)}
-            className="mb-1 mr-2 px-2.5 py-0.5 rounded bg-white border border-slate-300 text-[11px] font-medium text-slate-700 hover:bg-slate-50 cursor-pointer"
-          >
-            {showRightBoardDock ? 'Ocultar Placa Lateral' : 'Mostrar Placa KC868-A16'}
-          </button>
-        )}
+        <div className="flex items-center gap-1.5 mb-1 mr-2">
+          {!showBottomConsole && (
+            <button
+              onClick={() => setShowBottomConsole(true)}
+              className="px-2.5 py-0.5 rounded bg-white border border-slate-300 text-[11px] font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+            >
+              <PanelBottomOpen className="w-3.5 h-3.5 text-[#0f766e]" />
+              <span>Mostrar Logs ({logs.length})</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Main Workspace Area */}
+      {/* Main Workspace with Resizable & Closable Panels */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Library Sidebar */}
-        <LeftLibrarySidebar />
+        {/* Left Resizable Sidebar */}
+        {showLeftSidebar && (
+          <>
+            <LeftLibrarySidebar
+              width={leftWidth}
+              onClose={() => setShowLeftSidebar(false)}
+            />
+            {/* Vertical Drag Handle for Left Sidebar */}
+            <div
+              onMouseDown={() => {
+                draggingRef.current = 'left';
+                document.body.style.cursor = 'col-resize';
+              }}
+              title="Arrastra para redimensionar la librería izquierda"
+              className="w-1.5 bg-slate-200 hover:bg-[#0f766e]/60 cursor-col-resize transition-colors shrink-0 flex items-center justify-center"
+            >
+              <div className="w-0.5 h-8 bg-slate-400 rounded-full" />
+            </div>
+          </>
+        )}
 
-        {/* Center Editor / Lab + Bottom Oscilloscope & Network Console */}
+        {/* Center Editor / Lab + Resizable Bottom Console */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="flex-1 overflow-hidden">
             {workspaceView === 'networks' ? (
@@ -283,14 +365,46 @@ export const App: React.FC = () => {
               <STEditor />
             )}
           </div>
-          <BottomConsole />
+
+          {showBottomConsole && (
+            <>
+              {/* Horizontal Drag Handle for Bottom Console (Simulino pill handle style) */}
+              <div
+                onMouseDown={() => {
+                  draggingRef.current = 'bottom';
+                  document.body.style.cursor = 'row-resize';
+                }}
+                title="Arrastra hacia arriba o abajo para redimensionar el panel de mensajes y logs"
+                className="h-2 bg-[#f1f5f9] hover:bg-[#0f766e]/30 border-t border-slate-300 cursor-row-resize transition-colors shrink-0 flex items-center justify-center"
+              >
+                <div className="w-10 h-1 bg-slate-300 rounded-full" />
+              </div>
+              <BottomConsole
+                height={bottomHeight}
+                onClose={() => setShowBottomConsole(false)}
+              />
+            </>
+          )}
         </div>
 
-        {/* Optional Docked KinCony KC868-A16 Board on Right */}
+        {/* Right Resizable KinCony KC868-A16 Board Panel */}
         {workspaceView === 'schematic' && showRightBoardDock && (
-          <div className="w-[380px] xl:w-[410px] shrink-0 h-full overflow-hidden">
-            <BoardSimulator />
-          </div>
+          <>
+            {/* Vertical Drag Handle for Right Board Panel */}
+            <div
+              onMouseDown={() => {
+                draggingRef.current = 'right';
+                document.body.style.cursor = 'col-resize';
+              }}
+              title="Arrastra para redimensionar el panel de la placa KC868-A16"
+              className="w-1.5 bg-slate-200 hover:bg-[#0f766e]/60 cursor-col-resize transition-colors shrink-0 flex items-center justify-center"
+            >
+              <div className="w-0.5 h-8 bg-slate-400 rounded-full" />
+            </div>
+            <div style={{ width: rightWidth }} className="shrink-0 h-full overflow-hidden">
+              <BoardSimulator onClose={() => setShowRightBoardDock(false)} />
+            </div>
+          </>
         )}
       </div>
 
