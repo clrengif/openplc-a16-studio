@@ -1,17 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Cpu,
-  Settings,
   X,
   Plus,
   Check,
-  FolderOpen,
-  FilePlus,
-  Save,
-  BookOpen,
   Maximize2,
   Minimize2,
   ChevronRight,
+  Globe,
 } from 'lucide-react';
 import { usePLCStore } from './store/usePLCStore';
 import { LeftLibrarySidebar } from './components/LeftLibrarySidebar';
@@ -28,11 +23,13 @@ import { ExamplesModal } from './components/ExamplesModal';
 import { PLC_EXAMPLES, PlnoProjectFile } from './utils/plcExamples';
 import { PLCLanguage, ScanFrequency } from './types/plc';
 import { initPclinoGlobalApi } from './sdk/pclinoApi';
+import { LOCALES, LocaleCode, translateText } from './utils/i18n';
 
-type OpenMenuId = 'archivo' | 'editar' | 'ver' | 'simulacion' | 'redes' | 'ayuda' | null;
+type OpenMenuId = 'archivo' | 'editar' | 'ver' | 'simulacion' | 'herramientas' | 'ayuda' | null;
 
 export const App: React.FC = () => {
   const {
+    uiLocale,
     projectFileName,
     workspaceView,
     language,
@@ -42,6 +39,7 @@ export const App: React.FC = () => {
     lastScanUs,
     rungs,
     selectedRungId,
+    setUiLocale,
     setProjectFileName,
     loadPlnoProject,
     newBlankProject,
@@ -63,10 +61,14 @@ export const App: React.FC = () => {
     addLog,
   } = usePLCStore();
 
+  const t = (text: string) => translateText(uiLocale, text);
+
   const [openMenu, setOpenMenu] = useState<OpenMenuId>(null);
   const [showExamplesSubmenu, setShowExamplesSubmenu] = useState(false);
+  const [showLangSubmenu, setShowLangSubmenu] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showExamplesModal, setShowExamplesModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
 
   // Window visibility states (controlled via X buttons on windows and the "Ver" menu)
   const [showLeftSidebar, setShowLeftSidebar] = useState(true);
@@ -77,8 +79,8 @@ export const App: React.FC = () => {
   const [isCenterFullscreen, setIsCenterFullscreen] = useState(false);
 
   // Resizable panel dimensions
-  const [leftWidth, setLeftWidth] = useState(248);
-  const [rightWidth, setRightWidth] = useState(390);
+  const [leftWidth, setLeftWidth] = useState(236);
+  const [rightWidth, setRightWidth] = useState(380);
   const [bottomHeight, setBottomHeight] = useState(215);
 
   const draggingRef = useRef<'left' | 'right' | 'bottom' | null>(null);
@@ -106,6 +108,7 @@ export const App: React.FC = () => {
       if (menuBarRef.current && !menuBarRef.current.contains(e.target as Node)) {
         setOpenMenu(null);
         setShowExamplesSubmenu(false);
+        setShowLangSubmenu(false);
       }
     };
     window.addEventListener('mousedown', handleClickOutside);
@@ -117,7 +120,7 @@ export const App: React.FC = () => {
     const onMouseMove = (e: MouseEvent) => {
       if (!draggingRef.current) return;
       if (draggingRef.current === 'left') {
-        setLeftWidth(Math.max(180, Math.min(450, e.clientX)));
+        setLeftWidth(Math.max(180, Math.min(440, e.clientX)));
       } else if (draggingRef.current === 'right') {
         setRightWidth(Math.max(280, Math.min(620, window.innerWidth - e.clientX)));
       } else if (draggingRef.current === 'bottom') {
@@ -155,7 +158,7 @@ export const App: React.FC = () => {
     a.download = targetName;
     a.click();
     URL.revokeObjectURL(url);
-    addLog('INFO', `Archivo guardado: ${targetName}`);
+    addLog('INFO', `${t('Guardar')}: ${targetName}`);
     setOpenMenu(null);
   };
 
@@ -173,10 +176,10 @@ export const App: React.FC = () => {
             fileName: file.name,
           });
         } else {
-          addLog('ERROR', `El archivo ${file.name} no tiene una estructura .plno válida.`);
+          addLog('ERROR', `Invalid .plno file: ${file.name}`);
         }
       } catch {
-        addLog('ERROR', `No se pudo leer el archivo ${file.name}.`);
+        addLog('ERROR', `Could not read file: ${file.name}`);
       }
     };
     reader.readAsText(file);
@@ -184,7 +187,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#f4f6f8] text-slate-800 overflow-hidden select-none">
+    <div className="flex flex-col h-screen w-screen bg-[#e6eaee] text-[#18232e] overflow-hidden select-none">
       {/* Hidden File Input for Opening .plno Files */}
       <input
         ref={fileInputRef}
@@ -194,44 +197,44 @@ export const App: React.FC = () => {
         className="hidden"
       />
 
-      {/* Row 1: Top Menu & Control Bar (Hidden when Central Window is in Fullscreen Mode) */}
+      {/* Top Header Bar (#top) — Identical layout & identity to Simulino */}
       {!isCenterFullscreen && (
-        <header className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 bg-[#f1f5f9] border-b border-slate-300 z-30">
-          {/* Left: PCLino Brand + Classic Desktop Dropdown Menus */}
-          <div ref={menuBarRef} className="flex items-center gap-3 relative">
-            <div className="flex items-center gap-2 mr-1">
-              <div className="w-7 h-7 rounded-full bg-[#ea580c] flex items-center justify-center text-white shadow-2xs">
-                <Cpu className="w-4 h-4" />
-              </div>
-              <span className="text-base font-extrabold tracking-tight text-slate-900">
-                PCLino
-              </span>
-            </div>
+        <header className="bg-[#f3f5f7] border-b border-[#cbd3db] px-4 py-2 flex flex-wrap items-center gap-x-3.5 gap-y-2 z-30">
+          {/* 1. Brand Logo + PCLino Title (Barlow Condensed 21px) */}
+          <h1 className="inline-flex items-center gap-1.5 m-0 mr-1">
+            <img src="/pclino_icono.svg" alt="" className="w-[26px] h-[26px]" />
+            <span className="simulino-brand">PCLino</span>
+          </h1>
 
-            {/* Menu: Archivo */}
+          {/* 2. Classic 6-Menu Bar (#menubar: Archivo, Editar, Ver, Simulación, Herramientas, Ayuda) */}
+          <nav
+            ref={menuBarRef}
+            role="menubar"
+            aria-label="Menú principal"
+            className="flex flex-wrap items-center gap-0 -ml-1.5 relative text-[13.5px]"
+          >
+            {/* Menu 1: Archivo / File */}
             <div className="relative">
               <button
                 onClick={() => setOpenMenu(openMenu === 'archivo' ? null : 'archivo')}
-                className={`px-2 py-1 rounded text-xs font-medium cursor-pointer ${
-                  openMenu === 'archivo'
-                    ? 'bg-slate-200 text-slate-900'
-                    : 'text-slate-700 hover:bg-slate-200/60'
+                onMouseEnter={() => openMenu && setOpenMenu('archivo')}
+                className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                  openMenu === 'archivo' ? 'bg-[#d4e9ec]' : 'hover:bg-[#d4e9ec]'
                 }`}
               >
-                Archivo
+                {t('Archivo')}
               </button>
 
               {openMenu === 'archivo' && (
-                <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-300 rounded-lg shadow-xl py-1.5 text-xs z-50">
+                <div className="absolute left-0 top-full mt-0.5 min-w-[230px] bg-[#f3f5f7] border border-[#cbd3db] rounded-md shadow-xl p-1 text-[13px] z-50">
                   <button
                     onClick={() => {
                       newBlankProject();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center gap-2.5 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center justify-between text-left cursor-pointer"
                   >
-                    <FilePlus className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Nuevo proyecto (.plno)</span>
+                    <span>{t('Nuevo proyecto (.plno)')}</span>
                   </button>
 
                   <button
@@ -239,13 +242,39 @@ export const App: React.FC = () => {
                       fileInputRef.current?.click();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center gap-2.5 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center justify-between text-left cursor-pointer"
                   >
-                    <FolderOpen className="w-3.5 h-3.5 text-[#0f766e]" />
-                    <span>Abrir archivo (.plno)...</span>
+                    <span>{t('Abrir archivo (.plno)...')}</span>
+                    <span className="text-[11px] font-mono text-[#5a6875] pl-4">⌘O</span>
                   </button>
 
-                  {/* Submenu: Ejemplos Clásicos de PLC */}
+                  <button
+                    onClick={() => handleSavePlno()}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center justify-between text-left cursor-pointer"
+                  >
+                    <span>
+                      {t('Guardar')} ({projectFileName})
+                    </span>
+                    <span className="text-[11px] font-mono text-[#5a6875] pl-4">⌘S</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const custom = window.prompt(
+                        uiLocale === 'en' ? 'File name (.plno):' : 'Nombre del archivo (.plno):',
+                        projectFileName
+                      );
+                      if (custom) handleSavePlno(custom);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center justify-between text-left cursor-pointer"
+                  >
+                    <span>{t('Guardar como (.plno)...')}</span>
+                    <span className="text-[11px] font-mono text-[#5a6875] pl-4">⌘⇧S</span>
+                  </button>
+
+                  <hr className="my-1 border-t border-[#cbd3db]" />
+
+                  {/* Submenu: Ejemplos */}
                   <div
                     onMouseEnter={() => setShowExamplesSubmenu(true)}
                     onMouseLeave={() => setShowExamplesSubmenu(false)}
@@ -256,19 +285,16 @@ export const App: React.FC = () => {
                         setShowExamplesModal(true);
                         setOpenMenu(null);
                       }}
-                      className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center justify-between text-left text-slate-800 font-semibold cursor-pointer"
+                      className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center justify-between text-left cursor-pointer"
                     >
-                      <span className="flex items-center gap-2.5">
-                        <BookOpen className="w-3.5 h-3.5 text-[#ea580c]" />
-                        <span>Abrir Ejemplos PLC (9)</span>
-                      </span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{t('Ejemplos PLC (9)')}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-[#5a6875]" />
                     </button>
 
                     {showExamplesSubmenu && (
-                      <div className="absolute left-full top-0 ml-0.5 w-80 bg-white border border-slate-300 rounded-lg shadow-xl py-1.5 z-50">
-                        <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                          Circuitos Clásicos de PLC (.plno)
+                      <div className="absolute left-full top-0 ml-0.5 w-80 bg-[#f3f5f7] border border-[#cbd3db] rounded-md shadow-xl p-1 z-50">
+                        <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#5a6875] border-b border-[#cbd3db]">
+                          {t('Circuitos Clásicos de PLC (.plno)')}
                         </div>
                         {PLC_EXAMPLES.map((ex) => (
                           <button
@@ -278,10 +304,10 @@ export const App: React.FC = () => {
                               setOpenMenu(null);
                               setShowExamplesSubmenu(false);
                             }}
-                            className="w-full px-3 py-1.5 hover:bg-teal-50 text-left flex flex-col cursor-pointer border-b border-slate-50 last:border-0"
+                            className="w-full px-2.5 py-1.5 rounded hover:bg-[#d4e9ec] text-left flex flex-col cursor-pointer"
                           >
-                            <span className="font-semibold text-slate-800">{ex.title}</span>
-                            <span className="text-[10px] text-slate-500 truncate">
+                            <span className="font-medium text-[#18232e]">{ex.title}</span>
+                            <span className="text-[11px] text-[#5a6875] truncate">
                               {ex.description}
                             </span>
                           </button>
@@ -290,82 +316,55 @@ export const App: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="my-1 border-t border-slate-200" />
-
-                  <button
-                    onClick={() => handleSavePlno()}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center justify-between text-left text-slate-700 cursor-pointer"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <Save className="w-3.5 h-3.5 text-[#0f766e]" />
-                      <span>Guardar ({projectFileName})</span>
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const custom = window.prompt(
-                        'Nombre del archivo (.plno):',
-                        projectFileName
-                      );
-                      if (custom) handleSavePlno(custom);
-                    }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center gap-2.5 text-left text-slate-700 cursor-pointer"
-                  >
-                    <Save className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Guardar como (.plno)...</span>
-                  </button>
+                  <hr className="my-1 border-t border-[#cbd3db]" />
 
                   <button
                     onClick={() => {
                       setShowExportModal(true);
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center gap-2.5 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center justify-between text-left cursor-pointer"
                   >
-                    <Cpu className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Exportar Firmware & HAL OpenPLC...</span>
+                    <span>{t('Exportar Firmware & HAL OpenPLC...')}</span>
                   </button>
 
-                  <div className="my-1 border-t border-slate-200" />
+                  <hr className="my-1 border-t border-[#cbd3db]" />
 
                   <button
                     onClick={() => {
                       newBlankProject();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-rose-50 flex items-center gap-2.5 text-left text-rose-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center justify-between text-left text-[#ae2c2c] cursor-pointer"
                   >
-                    <X className="w-3.5 h-3.5" />
-                    <span>Cerrar proyecto</span>
+                    <span>{t('Cerrar proyecto')}</span>
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Menu: Editar */}
+            {/* Menu 2: Editar / Edit */}
             <div className="relative">
               <button
                 onClick={() => setOpenMenu(openMenu === 'editar' ? null : 'editar')}
-                className={`px-2 py-1 rounded text-xs font-medium cursor-pointer ${
-                  openMenu === 'editar'
-                    ? 'bg-slate-200 text-slate-900'
-                    : 'text-slate-700 hover:bg-slate-200/60'
+                onMouseEnter={() => openMenu && setOpenMenu('editar')}
+                className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                  openMenu === 'editar' ? 'bg-[#d4e9ec]' : 'hover:bg-[#d4e9ec]'
                 }`}
               >
-                Editar
+                {t('Editar')}
               </button>
 
               {openMenu === 'editar' && (
-                <div className="absolute left-0 top-full mt-1 w-60 bg-white border border-slate-300 rounded-lg shadow-xl py-1.5 text-xs z-50">
+                <div className="absolute left-0 top-full mt-0.5 min-w-[240px] bg-[#f3f5f7] border border-[#cbd3db] rounded-md shadow-xl p-1 text-[13px] z-50">
                   <button
                     onClick={() => {
                       addRung();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
                   >
-                    + Añadir Red (Rung)
+                    {t('+ Añadir Red (Rung)')}
                   </button>
                   <button
                     onClick={() => {
@@ -373,85 +372,87 @@ export const App: React.FC = () => {
                       if (targetId) toggleParallelBranch(targetId, '%QX0.0');
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
                   >
-                    Conmutar Rama Paralela OR
+                    {t('Conmutar Rama Paralela OR')}
                   </button>
                   <button
                     onClick={() => {
                       syncLadderToST();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
                   >
-                    Convertir Ladder → Structured Text (ST)
+                    {t('Convertir Ladder → Structured Text (ST)')}
                   </button>
-                  <div className="my-1 border-t border-slate-200" />
+                  <hr className="my-1 border-t border-[#cbd3db]" />
                   <button
                     onClick={() => {
                       resetMemory();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
                   >
-                    Reiniciar Memoria del PLC
+                    {t('Reiniciar Memoria del PLC')}
                   </button>
                   <button
                     onClick={() => {
                       clearLogs();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
                   >
-                    Limpiar Historial de Logs
+                    {t('Limpiar Historial de Logs')}
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Menu: Ver (Window Activation & Fullscreen) */}
+            {/* Menu 3: Ver / View */}
             <div className="relative">
               <button
                 onClick={() => setOpenMenu(openMenu === 'ver' ? null : 'ver')}
-                className={`px-2 py-1 rounded text-xs font-medium cursor-pointer ${
-                  openMenu === 'ver'
-                    ? 'bg-slate-200 text-slate-900'
-                    : 'text-slate-700 hover:bg-slate-200/60'
+                onMouseEnter={() => openMenu && setOpenMenu('ver')}
+                className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                  openMenu === 'ver' ? 'bg-[#d4e9ec]' : 'hover:bg-[#d4e9ec]'
                 }`}
               >
-                Ver
+                {t('Ver')}
               </button>
 
               {openMenu === 'ver' && (
-                <div className="absolute left-0 top-full mt-1 w-68 bg-white border border-slate-300 rounded-lg shadow-xl py-1.5 text-xs z-50">
-                  <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Ventanas Acoplables
-                  </div>
+                <div className="absolute left-0 top-full mt-0.5 min-w-[265px] bg-[#f3f5f7] border border-[#cbd3db] rounded-md shadow-xl p-1 text-[13px] z-50">
                   <button
                     onClick={() => setShowLeftSidebar(!showLeftSidebar)}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center justify-between text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
                   >
-                    <span>Ventana Librería de Bloques (Izquierda)</span>
-                    {showLeftSidebar && <Check className="w-3.5 h-3.5 text-[#0f766e]" />}
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {showLeftSidebar ? '✓' : ''}
+                    </span>
+                    <span>{t('Panel de componentes (Izquierda)')}</span>
                   </button>
 
                   <button
                     onClick={() => setShowRightBoardDock(!showRightBoardDock)}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center justify-between text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
                   >
-                    <span>Ventana Placa KC868-A16 (Derecha)</span>
-                    {showRightBoardDock && <Check className="w-3.5 h-3.5 text-[#0f766e]" />}
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {showRightBoardDock ? '✓' : ''}
+                    </span>
+                    <span>{t('Panel de placa KC868-A16 (Derecha)')}</span>
                   </button>
 
                   <button
                     onClick={() => setShowBottomConsole(!showBottomConsole)}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center justify-between text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
                   >
-                    <span>Ventana Diagnósticos y Logs (Inferior)</span>
-                    {showBottomConsole && <Check className="w-3.5 h-3.5 text-[#0f766e]" />}
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {showBottomConsole ? '✓' : ''}
+                    </span>
+                    <span>{t('Panel de diagnósticos y registro (Inferior)')}</span>
                   </button>
 
-                  <div className="my-1 border-t border-slate-200" />
+                  <hr className="my-1 border-t border-[#cbd3db]" />
 
                   <button
                     onClick={() => {
@@ -461,9 +462,9 @@ export const App: React.FC = () => {
                       setIsCenterFullscreen(false);
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left font-medium text-[#0f766e] cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] pl-6 text-left cursor-pointer"
                   >
-                    Activar Todas las Ventanas
+                    {t('Mostrar todos los paneles')}
                   </button>
 
                   <button
@@ -471,215 +472,328 @@ export const App: React.FC = () => {
                       setIsCenterFullscreen(true);
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 flex items-center gap-2 text-left text-slate-800 font-semibold cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] pl-6 text-left cursor-pointer"
                   >
-                    <Maximize2 className="w-3.5 h-3.5 text-[#0f766e]" />
-                    <span>Ventana Central en Pantalla Completa</span>
+                    {t('Ventana central en pantalla completa')}
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Menu: Simulación */}
+            {/* Menu 4: Simulación / Simulation */}
             <div className="relative">
               <button
                 onClick={() => setOpenMenu(openMenu === 'simulacion' ? null : 'simulacion')}
-                className={`px-2 py-1 rounded text-xs font-medium cursor-pointer ${
-                  openMenu === 'simulacion'
-                    ? 'bg-slate-200 text-slate-900'
-                    : 'text-slate-700 hover:bg-slate-200/60'
+                onMouseEnter={() => openMenu && setOpenMenu('simulacion')}
+                className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                  openMenu === 'simulacion' ? 'bg-[#d4e9ec]' : 'hover:bg-[#d4e9ec]'
                 }`}
               >
-                Simulación
+                {t('Simulación')}
               </button>
 
               {openMenu === 'simulacion' && (
-                <div className="absolute left-0 top-full mt-1 w-56 bg-white border border-slate-300 rounded-lg shadow-xl py-1.5 text-xs z-50">
+                <div className="absolute left-0 top-full mt-0.5 min-w-[230px] bg-[#f3f5f7] border border-[#cbd3db] rounded-md shadow-xl p-1 text-[13px] z-50">
                   <button
                     onClick={() => {
                       setRunning(!isRunning);
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left font-semibold text-slate-800 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left font-medium cursor-pointer"
                   >
-                    {isRunning ? 'Detener Simulación (STOP)' : 'Iniciar Simulación (RUN)'}
+                    {isRunning ? t('Detener simulación') : t('Simular en vivo')}
                   </button>
                   <button
                     onClick={() => {
                       stepSingleScan();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
                   >
-                    Ejecutar 1 Ciclo de Scan (Paso)
+                    {t('Ejecutar 1 ciclo de Scan (Calcular)')}
                   </button>
                   <button
                     onClick={() => {
                       compileProgram();
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
                   >
-                    Compilar y Validar IEC 61131-3
+                    {t('Compilar y validar IEC 61131-3')}
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Menu: Redes Industriales */}
+            {/* Menu 5: Herramientas / Tools (Simulino style: houses all specialized workspaces & instruments) */}
             <div className="relative">
               <button
-                onClick={() => setOpenMenu(openMenu === 'redes' ? null : 'redes')}
-                className={`px-2 py-1 rounded text-xs font-semibold cursor-pointer ${
-                  openMenu === 'redes'
-                    ? 'bg-slate-200 text-[#0f766e]'
-                    : 'text-[#0f766e] hover:bg-slate-200/60'
+                onClick={() => setOpenMenu(openMenu === 'herramientas' ? null : 'herramientas')}
+                onMouseEnter={() => openMenu && setOpenMenu('herramientas')}
+                className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                  openMenu === 'herramientas' ? 'bg-[#d4e9ec]' : 'hover:bg-[#d4e9ec]'
                 }`}
               >
-                Redes Industriales
+                {t('Herramientas')}
               </button>
 
-              {openMenu === 'redes' && (
-                <div className="absolute left-0 top-full mt-1 w-64 bg-white border border-slate-300 rounded-lg shadow-xl py-1.5 text-xs z-50">
+              {openMenu === 'herramientas' && (
+                <div className="absolute left-0 top-full mt-0.5 min-w-[270px] bg-[#f3f5f7] border border-[#cbd3db] rounded-md shadow-xl p-1 text-[13px] z-50">
+                  <button
+                    onClick={() => {
+                      setWorkspaceView('schematic');
+                      setOpenMenu(null);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
+                  >
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {workspaceView === 'schematic' ? '✓' : ''}
+                    </span>
+                    <span>{t('Esquemático Ladder / ST')}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setWorkspaceView('grafcet');
+                      setOpenMenu(null);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
+                  >
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {workspaceView === 'grafcet' ? '✓' : ''}
+                    </span>
+                    <span>{t('Editor GRAFCET / SFC')}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setWorkspaceView('twin2d');
+                      setOpenMenu(null);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
+                  >
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {workspaceView === 'twin2d' ? '✓' : ''}
+                    </span>
+                    <span>{t('Gemelo Digital 2D de Planta')}</span>
+                  </button>
+
                   <button
                     onClick={() => {
                       setWorkspaceView('networks');
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left font-semibold text-slate-800 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
                   >
-                    Abrir Laboratorio de Redes Industriales
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {workspaceView === 'networks' ? '✓' : ''}
+                    </span>
+                    <span>{t('Laboratorio de Redes Industriales')}</span>
                   </button>
-                  <div className="my-1 border-t border-slate-200" />
+
+                  <button
+                    onClick={() => {
+                      setWorkspaceView('board');
+                      setOpenMenu(null);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
+                  >
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {workspaceView === 'board' ? '✓' : ''}
+                    </span>
+                    <span>{t('Vista Placa KinCony KC868-A16')}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setWorkspaceView('api_mcp');
+                      setOpenMenu(null);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
+                  >
+                    <span className="w-4 text-[#0b6b78] font-bold">
+                      {workspaceView === 'api_mcp' ? '✓' : ''}
+                    </span>
+                    <span>{t('Consola SDK API & Servidor MCP')}</span>
+                  </button>
+
+                  <hr className="my-1 border-t border-[#cbd3db]" />
+
                   <button
                     onClick={() => {
                       sendModbusTCPRequest(1, 0, 8);
                       setShowBottomConsole(true);
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] pl-6 text-left cursor-pointer"
                   >
-                    Inyectar Petición Modbus TCP (Puerto 502)
+                    {t('Inyectar trama Modbus TCP (502)')}
                   </button>
+
                   <button
                     onClick={() => {
                       sendModbusRTURequest(3, 0, 4);
                       setShowBottomConsole(true);
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] pl-6 text-left cursor-pointer"
                   >
-                    Inyectar Petición RS485 Modbus RTU
+                    {t('Inyectar trama RS485 Modbus RTU')}
                   </button>
+
                   <button
                     onClick={() => {
                       captureI2CBusFrames();
                       setShowBottomConsole(true);
                       setOpenMenu(null);
                     }}
-                    className="w-full px-3 py-1.5 hover:bg-teal-50 text-left text-slate-700 cursor-pointer"
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] pl-6 text-left cursor-pointer"
                   >
-                    Capturar Tramas Bus I²C 4×PCF8574
+                    {t('Capturar bus I²C 4×PCF8574')}
+                  </button>
+
+                  <hr className="my-1 border-t border-[#cbd3db]" />
+
+                  <button
+                    onClick={() => {
+                      setShowExportModal(true);
+                      setOpenMenu(null);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] pl-6 text-left cursor-pointer"
+                  >
+                    {t('Firmware ESP32 & Flasheo WebSerial...')}
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Quick Examples Button */}
+            {/* Menu 6: Ayuda / Help (Includes Idioma / Language submenu exactly like Simulino) */}
+            <div className="relative">
+              <button
+                onClick={() => setOpenMenu(openMenu === 'ayuda' ? null : 'ayuda')}
+                onMouseEnter={() => openMenu && setOpenMenu('ayuda')}
+                className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
+                  openMenu === 'ayuda' ? 'bg-[#d4e9ec]' : 'hover:bg-[#d4e9ec]'
+                }`}
+              >
+                {t('Ayuda')}
+              </button>
+
+              {openMenu === 'ayuda' && (
+                <div className="absolute left-0 top-full mt-0.5 min-w-[215px] bg-[#f3f5f7] border border-[#cbd3db] rounded-md shadow-xl p-1 text-[13px] z-50">
+                  {/* Idioma / Language Submenu */}
+                  <div
+                    onMouseEnter={() => setShowLangSubmenu(true)}
+                    onMouseLeave={() => setShowLangSubmenu(false)}
+                    className="relative"
+                  >
+                    <button className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center justify-between text-left cursor-pointer">
+                      <span>{t('Idioma')}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-[#5a6875]" />
+                    </button>
+
+                    {showLangSubmenu && (
+                      <div className="absolute left-full top-0 ml-0.5 min-w-[150px] bg-[#f3f5f7] border border-[#cbd3db] rounded-md shadow-xl p-1 z-50">
+                        {(Object.entries(LOCALES) as [LocaleCode, string][]).map(([code, label]) => (
+                          <button
+                            key={code}
+                            onClick={() => {
+                              setUiLocale(code);
+                              setOpenMenu(null);
+                              setShowLangSubmenu(false);
+                            }}
+                            className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] flex items-center gap-2 text-left cursor-pointer"
+                          >
+                            <span className="w-4 text-[#0b6b78] font-bold">
+                              {uiLocale === code ? '✓' : ''}
+                            </span>
+                            <span>{label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <hr className="my-1 border-t border-[#cbd3db]" />
+
+                  <button
+                    onClick={() => {
+                      setShowExamplesModal(true);
+                      setOpenMenu(null);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
+                  >
+                    {t('Galería de ejemplos PLC...')}
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowAboutModal(true);
+                      setOpenMenu(null);
+                    }}
+                    className="w-full px-2.5 py-1 rounded hover:bg-[#d4e9ec] text-left cursor-pointer"
+                  >
+                    {t('Acerca de PCLino')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </nav>
+
+          {/* 3. Simulino's 2-button Segmented View Toggle (#viewseg: Esquemático | Placa) */}
+          <div
+            role="group"
+            aria-label={uiLocale === 'en' ? 'View' : 'Vista'}
+            className="inline-flex border border-[#cbd3db] rounded-[6px] overflow-hidden bg-[#fbfcfd] text-[13px]"
+          >
             <button
-              onClick={() => setShowExamplesModal(true)}
-              className="px-2 py-1 rounded text-xs font-semibold text-[#ea580c] hover:bg-orange-50 cursor-pointer flex items-center gap-1"
+              onClick={() => setWorkspaceView('schematic')}
+              className={`px-2.5 py-1 cursor-pointer transition-colors ${
+                workspaceView === 'schematic'
+                  ? 'bg-[#0b6b78] text-white font-medium'
+                  : 'text-[#5a6875] hover:text-[#18232e]'
+              }`}
             >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>Ejemplos</span>
+              {uiLocale === 'en' ? 'Schematic' : 'Esquemático'}
+            </button>
+            <button
+              onClick={() => setWorkspaceView('board')}
+              className={`px-2.5 py-1 border-l border-[#cbd3db] cursor-pointer transition-colors ${
+                workspaceView === 'board'
+                  ? 'bg-[#0b6b78] text-white font-medium'
+                  : 'text-[#5a6875] hover:text-[#18232e]'
+              }`}
+            >
+              {uiLocale === 'en' ? 'Board' : 'Placa'}
             </button>
           </div>
 
-          {/* Right: Segmented View Switcher + .plno Filename + Simular CTA */}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="flex items-center bg-white rounded-md border border-slate-300 p-0.5 shadow-2xs flex-wrap">
-              <button
-                onClick={() => setWorkspaceView('schematic')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                  workspaceView === 'schematic'
-                    ? 'bg-[#0f766e] text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Esquemático PLC
-              </button>
-              <button
-                onClick={() => setWorkspaceView('grafcet')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                  workspaceView === 'grafcet'
-                    ? 'bg-[#0f766e] text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                GRAFCET (SFC)
-              </button>
-              <button
-                onClick={() => setWorkspaceView('twin2d')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                  workspaceView === 'twin2d'
-                    ? 'bg-[#0f766e] text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Gemelo 2D Planta
-              </button>
-              <button
-                onClick={() => setWorkspaceView('networks')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                  workspaceView === 'networks'
-                    ? 'bg-[#0f766e] text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Redes Industriales
-              </button>
-              <button
-                onClick={() => setWorkspaceView('board')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                  workspaceView === 'board'
-                    ? 'bg-[#0f766e] text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Placa KC868-A16
-              </button>
-              <button
-                onClick={() => setWorkspaceView('api_mcp')}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                  workspaceView === 'api_mcp'
-                    ? 'bg-[#ea580c] text-white'
-                    : 'text-[#ea580c] hover:bg-orange-50'
-                }`}
-              >
-                API & MCP
-              </button>
-            </div>
+          {/* 4. Open Filename (#fname) */}
+          <span
+            onClick={() => {
+              const name = window.prompt(
+                uiLocale === 'en' ? 'Project name (.plno):' : 'Nombre del proyecto (.plno):',
+                projectFileName
+              );
+              if (name) setProjectFileName(name);
+            }}
+            title={uiLocale === 'en' ? 'Open file (click to rename)' : 'Archivo abierto (clic para renombrar)'}
+            className="font-mono text-[12px] text-[#5a6875] hover:text-[#0b6b78] cursor-pointer max-w-[22ch] truncate"
+          >
+            {projectFileName}
+          </span>
 
-            <span
-              onClick={() => {
-                const name = window.prompt('Nombre del proyecto (.plno):', projectFileName);
-                if (name) setProjectFileName(name);
-              }}
-              title="Haz clic para renombrar el archivo .plno"
-              className="hidden xl:inline text-xs font-mono text-slate-600 hover:text-[#0f766e] px-1 cursor-pointer"
-            >
-              {projectFileName}
-            </span>
-
+          {/* 5. Simulino Run / Calculate / Profile Group */}
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => setRunning(!isRunning)}
-              className={`px-4 py-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer shadow-2xs ${
+              className={`px-3.5 py-1 rounded-[4px] border text-[13.5px] font-semibold cursor-pointer transition-colors ${
                 isRunning
-                  ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                  : 'bg-[#0f766e] hover:bg-[#115e59] text-white'
+                  ? 'bg-[#ae2c2c] border-[#ae2c2c] text-white'
+                  : 'bg-[#0b6b78] border-[#0b6b78] text-white hover:bg-[#095964]'
               }`}
             >
-              {isRunning ? 'Detener' : 'Simular'}
+              {isRunning ? t('Detener') : t('Simular')}
             </button>
 
             <button
@@ -687,9 +801,9 @@ export const App: React.FC = () => {
                 compileProgram();
                 stepSingleScan();
               }}
-              className="px-3 py-1.5 rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-slate-700 cursor-pointer"
+              className="px-2.5 py-1 rounded-[4px] bg-[#fbfcfd] border border-[#cbd3db] hover:border-[#0b6b78] text-[13.5px] text-[#18232e] cursor-pointer"
             >
-              Calcular / Paso
+              {t('Calcular')}
             </button>
 
             <select
@@ -698,132 +812,159 @@ export const App: React.FC = () => {
                 setLanguage(e.target.value as PLCLanguage);
                 setWorkspaceView('schematic');
               }}
-              className="px-2.5 py-1.5 rounded-md bg-white border border-slate-300 text-xs font-medium text-slate-800 cursor-pointer focus:outline-none focus:border-[#0f766e]"
+              aria-label="Lenguaje IEC"
+              className="px-2 py-1 rounded-[4px] bg-[#fbfcfd] border border-[#cbd3db] hover:border-[#0b6b78] text-[13.5px] text-[#18232e] cursor-pointer"
             >
-              <option value="LD">Ladder (LD)</option>
-              <option value="ST">Structured Text (ST)</option>
+              <option value="LD">{uiLocale === 'en' ? 'Ladder (LD)' : 'Escalera (LD)'}</option>
+              <option value="ST">{uiLocale === 'en' ? 'Structured Text (ST)' : 'Texto Estructurado (ST)'}</option>
             </select>
 
             <button
               onClick={() => setShowExportModal(true)}
-              title="Exportar Firmware ESP32, OpenPLC Custom HAL, ST y PLCopen XML"
-              className="p-1.5 rounded-md bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 cursor-pointer"
+              title={t('Exportar Firmware & HAL OpenPLC...')}
+              className="px-2.5 py-1 rounded-[4px] bg-[#fbfcfd] border border-[#cbd3db] hover:border-[#0b6b78] text-[13.5px] text-[#18232e] cursor-pointer"
             >
-              <Settings className="w-4 h-4" />
+              ⚙
+            </button>
+          </div>
+
+          {/* 6. Simulino Window & Speed Group + Optional Language Toggle (ES / EN) + Right Status */}
+          <div className="w-full flex flex-wrap items-center justify-between gap-2 pt-0.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <label className="simulino-lab">{t('VENTANA')}</label>
+              <select
+                value={scanFreq}
+                onChange={(e) => setScanFreq(Number(e.target.value) as ScanFrequency)}
+                className="px-2 py-1 rounded-[4px] bg-[#fbfcfd] border border-[#cbd3db] font-mono text-[12.5px] text-[#18232e] w-[84px]"
+              >
+                <option value={10}>100 ms</option>
+                <option value={20}>50 ms</option>
+                <option value={50}>20 ms</option>
+                <option value={100}>10 ms</option>
+              </select>
+
+              <label className="simulino-lab ml-1">{t('VELOCIDAD')}</label>
+              <select
+                defaultValue="1"
+                className="px-2 py-1 rounded-[4px] bg-[#fbfcfd] border border-[#cbd3db] text-[13px] text-[#18232e]"
+              >
+                <option value="1">{t('Tiempo real')}</option>
+                <option value="0.1">1/10</option>
+                <option value="0.01">1/100</option>
+              </select>
+
+              {/* If viewing a specialized tool from Herramientas, show a clean 'Volver al esquemático' button like Simulino */}
+              {workspaceView !== 'schematic' && (
+                <button
+                  onClick={() => setWorkspaceView('schematic')}
+                  className="ml-2 px-2.5 py-1 rounded-[4px] bg-[#d4e9ec] border border-[#0b6b78] text-[#0b6b78] text-[12.5px] font-medium cursor-pointer"
+                >
+                  ← {t('Volver al esquemático')}
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 ml-auto">
+              {/* Optional Language Switcher (ES | EN) */}
+              <button
+                onClick={() => setUiLocale(uiLocale === 'es' ? 'en' : 'es')}
+                title={uiLocale === 'es' ? 'Switch to English' : 'Cambiar a Español'}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[4px] bg-[#fbfcfd] border border-[#cbd3db] hover:border-[#0b6b78] font-mono text-[11.5px] text-[#5a6875] hover:text-[#18232e] cursor-pointer"
+              >
+                <Globe className="w-3 h-3 text-[#0b6b78]" />
+                <span className={uiLocale === 'es' ? 'font-bold text-[#0b6b78]' : ''}>ES</span>
+                <span>/</span>
+                <span className={uiLocale === 'en' ? 'font-bold text-[#0b6b78]' : ''}>EN</span>
+              </button>
+
+              {/* Status text (#status) */}
+              <div
+                role="status"
+                className={`font-mono text-[12px] text-right truncate ${
+                  isRunning ? 'text-[#1f7a4d]' : 'text-[#5a6875]'
+                }`}
+              >
+                {isRunning
+                  ? `${t('Simulación en curso')} (${scanFreq} Hz · Scan #${scanCount} · ${lastScanUs} µs)`
+                  : t('Simulación detenida.')}
+              </div>
+            </div>
+          </div>
+
+          {/* 7. Simulino Project Tab Strip (#projtabs) */}
+          <div
+            role="tablist"
+            aria-label="Proyectos abiertos"
+            className="w-full flex items-center justify-between gap-1 -mb-2 pt-0.5 overflow-x-auto"
+          >
+            <div className="flex items-center gap-0.5">
+              <div
+                role="tab"
+                aria-selected="true"
+                className="flex items-center gap-2 max-w-[260px] px-2.5 py-1 border border-[#cbd3db] border-b-0 rounded-t-[6px] bg-[#e6eaee] text-[#18232e] text-[12px] font-medium shadow-[inset_0_2px_0_#0b6b78]"
+              >
+                <span className="truncate">
+                  {workspaceView === 'networks'
+                    ? t('Laboratorio de Redes Industriales')
+                    : workspaceView === 'grafcet'
+                    ? t('Editor GRAFCET / SFC')
+                    : workspaceView === 'twin2d'
+                    ? t('Gemelo Digital 2D de Planta')
+                    : workspaceView === 'api_mcp'
+                    ? t('Consola SDK API & Servidor MCP')
+                    : workspaceView === 'board'
+                    ? t('Vista Placa KinCony KC868-A16')
+                    : projectFileName}
+                </span>
+                <button
+                  onClick={newBlankProject}
+                  title={t('Cerrar proyecto')}
+                  className="px-1 rounded hover:bg-[#cbd3db] text-[#5a6875] hover:text-[#18232e] cursor-pointer"
+                >
+                  ×
+                </button>
+              </div>
+              <button
+                onClick={addRung}
+                title={t('+ Añadir Red (Rung)')}
+                className="px-2.5 py-0.5 text-[15px] text-[#5a6875] hover:text-[#18232e] cursor-pointer"
+              >
+                +
+              </button>
+            </div>
+
+            <button
+              onClick={() => setIsCenterFullscreen(true)}
+              title={t('Ventana central en pantalla completa')}
+              className="mb-1 px-2 py-0.5 rounded-[4px] bg-[#fbfcfd] hover:border-[#0b6b78] border border-[#cbd3db] text-[#5a6875] hover:text-[#18232e] text-[11px] flex items-center gap-1 cursor-pointer"
+            >
+              <Maximize2 className="w-3 h-3 text-[#0b6b78]" />
+              <span>{t('Pantalla Completa')}</span>
             </button>
           </div>
         </header>
       )}
 
-      {/* Row 2: Parameters Sub-bar (Hidden in Fullscreen) */}
-      {!isCenterFullscreen && (
-        <div className="flex items-center justify-between px-3.5 py-1.5 bg-[#f8fafc] border-b border-slate-300 text-xs">
-          <div className="flex items-center gap-4 flex-wrap">
-            <label className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              <span>FRECUENCIA SCAN</span>
-              <select
-                value={scanFreq}
-                onChange={(e) => setScanFreq(Number(e.target.value) as ScanFrequency)}
-                className="px-2 py-0.5 rounded bg-white border border-slate-300 font-mono text-xs text-slate-800 normal-case"
-              >
-                <option value={10}>10 Hz (100 ms)</option>
-                <option value={20}>20 Hz (50 ms)</option>
-                <option value={50}>50 Hz (20 ms)</option>
-                <option value={100}>100 Hz (10 ms)</option>
-              </select>
-            </label>
-
-            <label className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              <span>VELOCIDAD</span>
-              <span className="px-2.5 py-0.5 rounded bg-white border border-slate-300 font-sans font-medium text-xs text-slate-800 normal-case">
-                Tiempo real
-              </span>
-            </label>
-
-            <button
-              onClick={resetMemory}
-              className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer"
-            >
-              Reiniciar memoria
-            </button>
-
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="px-2.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-semibold text-xs cursor-pointer"
-            >
-              Firmware & HAL OpenPLC
-            </button>
+      {/* Fullscreen Restore Bar when in Fullscreen Mode */}
+      {isCenterFullscreen && (
+        <div className="flex items-center justify-between px-3 py-1 bg-[#f3f5f7] border-b border-[#cbd3db] text-xs">
+          <div className="flex items-center gap-2">
+            <img src="/pclino_icono.svg" alt="" className="w-4 h-4" />
+            <span className="font-semibold text-[#18232e]">PCLino — {projectFileName}</span>
           </div>
-
-          <div className="font-mono text-xs text-slate-600">
-            {isRunning
-              ? `Simulación en curso (${scanFreq} Hz · Scan #${scanCount} · ${lastScanUs} µs)`
-              : 'Simulación detenida.'}
-          </div>
+          <button
+            onClick={() => setIsCenterFullscreen(false)}
+            className="px-2.5 py-1 rounded-[4px] bg-[#0b6b78] text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+          >
+            <Minimize2 className="w-3.5 h-3.5" />
+            <span>{t('Volver a Modo Ventanas')}</span>
+          </button>
         </div>
       )}
 
-      {/* Row 3: Central Window Tab Strip + Fullscreen Toggle Button */}
-      <div className="flex items-center justify-between px-2 pt-1.5 bg-[#e9eef2] border-b border-slate-300 text-xs">
-        <div className="flex items-center gap-1">
-          <div className="px-3 py-1.5 rounded-t-md bg-white border-t border-x border-slate-300 font-medium text-slate-800 flex items-center gap-2 -mb-px">
-            <span>
-              {workspaceView === 'networks'
-                ? 'Redes Industriales: Modbus TCP / RS485 RTU / HART / DeviceNet / OPC UA / I²C'
-                : workspaceView === 'grafcet'
-                ? 'Editor Gráfico GRAFCET / SFC (IEC 61131-3)'
-                : workspaceView === 'twin2d'
-                ? 'Gemelo Digital 2D de Planta Industrial (Lazo Cerrado)'
-                : workspaceView === 'api_mcp'
-                ? 'API Pública (window.pclino) & Servidor MCP (Model Context Protocol)'
-                : workspaceView === 'board'
-                ? 'Hardware: Placa KinCony KC868-A16 (ESP32)'
-                : `${projectFileName} — ${language === 'LD' ? 'Diagrama Ladder' : 'Structured Text'}`}
-            </span>
-            <button
-              onClick={newBlankProject}
-              title="Cerrar proyecto actual y crear uno en blanco"
-              className="p-0.5 rounded hover:bg-rose-100 text-slate-400 hover:text-rose-700 cursor-pointer"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-          <button
-            onClick={addRung}
-            className="p-1.5 text-slate-600 hover:text-slate-900 cursor-pointer"
-            title="Añadir nueva red"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Fullscreen / Restore Window Mode Icon Button */}
-        <div className="flex items-center gap-2 mb-1 mr-2">
-          {isCenterFullscreen ? (
-            <button
-              onClick={() => setIsCenterFullscreen(false)}
-              title="Salir de pantalla completa y volver al modo ventanas"
-              className="px-2.5 py-1 rounded bg-[#0f766e] hover:bg-[#115e59] text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
-            >
-              <Minimize2 className="w-3.5 h-3.5" />
-              <span>Volver a Modo Ventanas</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsCenterFullscreen(true)}
-              title="Expandir ventana central a pantalla completa"
-              className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-[11px] font-medium flex items-center gap-1 cursor-pointer"
-            >
-              <Maximize2 className="w-3 h-3 text-[#0f766e]" />
-              <span>Pantalla Completa</span>
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Main Workspace with Resizable & Closable Windows */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Resizable Sidebar (Hidden when closed or when Central Window is Fullscreen) */}
+      <div className="flex-1 flex overflow-hidden relative border-t border-[#cbd3db]">
+        {/* Left Resizable Sidebar (#tools) */}
         {!isCenterFullscreen && showLeftSidebar && (
           <>
             <LeftLibrarySidebar
@@ -835,16 +976,14 @@ export const App: React.FC = () => {
                 draggingRef.current = 'left';
                 document.body.style.cursor = 'col-resize';
               }}
-              title="Arrastra para redimensionar la ventana de librería"
-              className="w-1.5 bg-slate-200 hover:bg-[#0f766e]/60 cursor-col-resize transition-colors shrink-0 flex items-center justify-center"
-            >
-              <div className="w-0.5 h-8 bg-slate-400 rounded-full" />
-            </div>
+              title="Drag to resize"
+              className="w-1.5 bg-[#e6eaee] hover:bg-[#0b6b78]/50 border-x border-[#cbd3db] cursor-col-resize transition-colors shrink-0"
+            />
           </>
         )}
 
-        {/* Center Window + Resizable Bottom Console */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Center Window (#sheet) + Resizable Bottom Console (#scopeWrap) */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#fbfcfd]">
           <div className="flex-1 overflow-hidden flex flex-col">
             {workspaceView === 'networks' ? (
               <IndustrialNetworksLab />
@@ -870,10 +1009,10 @@ export const App: React.FC = () => {
                   draggingRef.current = 'bottom';
                   document.body.style.cursor = 'row-resize';
                 }}
-                title="Arrastra para redimensionar la ventana de mensajes y logs"
-                className="h-2 bg-[#f1f5f9] hover:bg-[#0f766e]/30 border-t border-slate-300 cursor-row-resize transition-colors shrink-0 flex items-center justify-center"
+                title={uiLocale === 'en' ? 'Drag to change height' : 'Arrastra para cambiar la altura'}
+                className="h-[7px] bg-[#f3f5f7] hover:bg-[#d4e9ec] border-t border-[#cbd3db] cursor-row-resize transition-colors shrink-0 flex items-center justify-center"
               >
-                <div className="w-10 h-1 bg-slate-300 rounded-full" />
+                <div className="w-[34px] h-[3px] bg-[#cbd3db] rounded-xs" />
               </div>
               <BottomConsole
                 height={bottomHeight}
@@ -883,7 +1022,7 @@ export const App: React.FC = () => {
           )}
         </div>
 
-        {/* Right Resizable KinCony KC868-A16 Board Window */}
+        {/* Right Resizable KinCony KC868-A16 Board Window (#side) */}
         {!isCenterFullscreen && workspaceView === 'schematic' && showRightBoardDock && (
           <>
             <div
@@ -891,11 +1030,9 @@ export const App: React.FC = () => {
                 draggingRef.current = 'right';
                 document.body.style.cursor = 'col-resize';
               }}
-              title="Arrastra para redimensionar la ventana de la placa KC868-A16"
-              className="w-1.5 bg-slate-200 hover:bg-[#0f766e]/60 cursor-col-resize transition-colors shrink-0 flex items-center justify-center"
-            >
-              <div className="w-0.5 h-8 bg-slate-400 rounded-full" />
-            </div>
+              title="Drag to resize"
+              className="w-1.5 bg-[#e6eaee] hover:bg-[#0b6b78]/50 border-x border-[#cbd3db] cursor-col-resize transition-colors shrink-0"
+            />
             <div style={{ width: rightWidth }} className="shrink-0 h-full overflow-hidden">
               <BoardSimulator onClose={() => setShowRightBoardDock(false)} />
             </div>
@@ -903,12 +1040,42 @@ export const App: React.FC = () => {
         )}
       </div>
 
+      {/* Export Firmware / HAL / WebSerial Modal */}
       {showExportModal && <ExportModal onClose={() => setShowExportModal(false)} />}
+
+      {/* PLC Examples Modal */}
       {showExamplesModal && (
         <ExamplesModal
           onSelectExample={(ex) => loadPlnoProject(ex)}
           onClose={() => setShowExamplesModal(false)}
         />
+      )}
+
+      {/* About PCLino Dialog (Identical style to Simulino's #info dialog) */}
+      {showAboutModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-[#f3f5f7] text-[#18232e] border border-[#cbd3db] rounded-lg p-5 max-w-md w-full shadow-xl">
+            <img
+              src="/pclino_icono.svg"
+              alt="PCLino"
+              className="w-24 h-24 mx-auto mb-3 p-2 bg-white rounded-lg border border-[#cbd3db]"
+            />
+            <h2 className="simulino-brand text-center mb-2">PCLino</h2>
+            <p className="text-xs text-[#5a6875] text-center leading-relaxed mb-4">
+              {uiLocale === 'en'
+                ? 'IEC 61131-3 PLC Studio & Industrial Networks Simulator for KinCony KC868-A16 (ESP32). Part of the Simulino laboratory suite.'
+                : 'Entorno IEC 61131-3 y Simulador de Redes Industriales para la placa KinCony KC868-A16 (ESP32). Con la identidad visual de Simulino.'}
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowAboutModal(false)}
+                className="px-3.5 py-1 rounded-[4px] bg-[#0b6b78] text-white text-xs font-semibold cursor-pointer"
+              >
+                {uiLocale === 'en' ? 'Close' : 'Cerrar'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -51,6 +51,7 @@ export function registerExternalScanHook(cb: ScanHookCallback): () => void {
 }
 
 interface PLCStoreState {
+  uiLocale: 'es' | 'en';
   projectFileName: string;
   workspaceView: WorkspaceView;
   language: PLCLanguage;
@@ -107,6 +108,7 @@ interface PLCStoreState {
   hwConnected: boolean;
 
   // Actions
+  setUiLocale: (loc: 'es' | 'en') => void;
   setProjectFileName: (name: string) => void;
   loadPlnoProject: (proj: PlnoProjectFile) => void;
   newBlankProject: () => void;
@@ -276,6 +278,7 @@ const nowTimeStr = (): string => {
 };
 
 export const usePLCStore = create<PLCStoreState>((set, get) => ({
+  uiLocale: (typeof window !== 'undefined' && localStorage.getItem('pclino-idioma') === 'en') ? 'en' : 'es',
   projectFileName: 'planta_kc868.plno',
   workspaceView: 'schematic',
   language: 'LD',
@@ -354,6 +357,14 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
     pcfOut2Addr: '0x25',
   },
   hwConnected: false,
+
+  setUiLocale: (loc) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pclino-idioma', loc);
+      document.documentElement.lang = loc;
+    }
+    set({ uiLocale: loc });
+  },
 
   setProjectFileName: (name) =>
     set({ projectFileName: name.endsWith('.plno') ? name : `${name}.plno` }),

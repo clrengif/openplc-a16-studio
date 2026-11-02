@@ -1,20 +1,51 @@
 @import "tailwindcss";
 
+:root {
+  --bg: #e6eaee;
+  --panel: #f3f5f7;
+  --paper: #fbfcfd;
+  --ink: #18232e;
+  --muted: #5a6875;
+  --line: #cbd3db;
+  --grid: #c6d2dc;
+  --accent: #0b6b78;
+  --accent-ink: #ffffff;
+  --accent-soft: #d4e9ec;
+  --danger: #ae2c2c;
+  --ok: #1f7a4d;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
 @layer base {
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    background-color: #f4f6f8;
-    color: #1e293b;
+    font: 13.5px/1.35 var(--body);
+    background-color: var(--bg);
+    color: var(--ink);
   }
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+    font-family: var(--mono);
   }
+}
+
+.simulino-brand {
+  font: 600 21px/1 var(--display);
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.simulino-lab {
+  font: 500 11px/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 /* Simulino-style schematic dot grid background */
 .simulino-grid {
-  background-color: #fbfcfd;
-  background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+  background-color: var(--paper);
+  background-image: radial-gradient(var(--grid) 1px, transparent 1px);
   background-size: 16px 16px;
 }
 
@@ -25,14 +56,14 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--panel);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--line);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--muted);
 }

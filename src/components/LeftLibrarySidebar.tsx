@@ -2,10 +2,8 @@ import React, { useState } from 'react';
 import {
   MousePointer,
   GitBranch,
+  Activity,
   Trash2,
-  ChevronRight,
-  ChevronDown,
-  Search,
   X,
 } from 'lucide-react';
 import { usePLCStore } from '../store/usePLCStore';
@@ -14,78 +12,87 @@ import { LadderElementType } from '../types/plc';
 interface LibraryItem {
   type: LadderElementType;
   glyph: string;
-  name: string;
-  desc: string;
+  nameEs: string;
+  nameEn: string;
+  descEs: string;
+  descEn: string;
 }
 
 interface LibraryCategory {
   id: string;
-  title: string;
+  titleEs: string;
+  titleEn: string;
   items: LibraryItem[];
 }
 
 const CATEGORIES: LibraryCategory[] = [
   {
     id: 'contacts',
-    title: 'Contactos y Flancos',
+    titleEs: 'Contactos y Flancos',
+    titleEn: 'Contacts & Edges',
     items: [
-      { type: 'NO', glyph: '─┤ ├─', name: 'Contacto NA (NO)', desc: 'Normalmente abierto (%IX, %QX, %MX)' },
-      { type: 'NC', glyph: '─┤/├─', name: 'Contacto NC', desc: 'Normalmente cerrado invertido' },
-      { type: 'R_TRIG', glyph: '─┤P├─', name: 'Flanco Subida (R_TRIG)', desc: 'Pulso de 1 scan al pasar 0 → 1' },
-      { type: 'F_TRIG', glyph: '─┤N├─', name: 'Flanco Bajada (F_TRIG)', desc: 'Pulso de 1 scan al pasar 1 → 0' },
+      { type: 'NO', glyph: '─┤ ├─', nameEs: 'Contacto NA (NO)', nameEn: 'NO Contact', descEs: 'Normalmente abierto (%IX, %QX, %MX)', descEn: 'Normally open (%IX, %QX, %MX)' },
+      { type: 'NC', glyph: '─┤/├─', nameEs: 'Contacto NC', nameEn: 'NC Contact', descEs: 'Normalmente cerrado invertido', descEn: 'Normally closed inverted' },
+      { type: 'R_TRIG', glyph: '─┤P├─', nameEs: 'Flanco Subida (R_TRIG)', nameEn: 'Rising Edge (R_TRIG)', descEs: 'Pulso de 1 scan al pasar 0 → 1', descEn: '1-scan pulse on 0 → 1' },
+      { type: 'F_TRIG', glyph: '─┤N├─', nameEs: 'Flanco Bajada (F_TRIG)', nameEn: 'Falling Edge (F_TRIG)', descEs: 'Pulso de 1 scan al pasar 1 → 0', descEn: '1-scan pulse on 1 → 0' },
     ],
   },
   {
     id: 'coils',
-    title: 'Bobinas y Biestables',
+    titleEs: 'Bobinas y Biestables',
+    titleEn: 'Coils & Bistables',
     items: [
-      { type: 'COIL', glyph: '─( )─', name: 'Bobina Estándar', desc: 'Escribe salida %QX o marca %MX' },
-      { type: 'NEG_COIL', glyph: '─(/)─', name: 'Bobina Negada', desc: 'Escribe el valor inverso del rung' },
-      { type: 'SET', glyph: '─(S)─', name: 'Bobina SET (Latch)', desc: 'Enclava salida en TRUE al energizar' },
-      { type: 'RESET', glyph: '─(R)─', name: 'Bobina RESET (Unlatch)', desc: 'Desenclava salida a FALSE' },
-      { type: 'SR', glyph: '[ SR ]', name: 'Biestable SR', desc: 'Flip-Flop con Set dominante (S1 / R)' },
-      { type: 'RS', glyph: '[ RS ]', name: 'Biestable RS', desc: 'Flip-Flop con Reset dominante (S / R1)' },
+      { type: 'COIL', glyph: '─( )─', nameEs: 'Bobina Estándar', nameEn: 'Standard Coil', descEs: 'Escribe salida %QX o marca %MX', descEn: 'Writes %QX output or %MX marker' },
+      { type: 'NEG_COIL', glyph: '─(/)─', nameEs: 'Bobina Negada', nameEn: 'Negated Coil', descEs: 'Escribe el valor inverso del rung', descEn: 'Writes inverted rung state' },
+      { type: 'SET', glyph: '─(S)─', nameEs: 'Bobina SET (Latch)', nameEn: 'SET Coil (Latch)', descEs: 'Enclava salida en TRUE al energizar', descEn: 'Latches output TRUE' },
+      { type: 'RESET', glyph: '─(R)─', nameEs: 'Bobina RESET (Unlatch)', nameEn: 'RESET Coil (Unlatch)', descEs: 'Desenclava salida a FALSE', descEn: 'Unlatches output FALSE' },
+      { type: 'SR', glyph: '[ SR ]', nameEs: 'Biestable SR', nameEn: 'SR Bistable', descEs: 'Flip-Flop con Set dominante (S1 / R)', descEn: 'Set-dominant flip-flop (S1 / R)' },
+      { type: 'RS', glyph: '[ RS ]', nameEs: 'Biestable RS', nameEn: 'RS Bistable', descEs: 'Flip-Flop con Reset dominante (S / R1)', descEn: 'Reset-dominant flip-flop (S / R1)' },
     ],
   },
   {
     id: 'timers',
-    title: 'Temporizadores IEC',
+    titleEs: 'Temporizadores IEC',
+    titleEn: 'IEC Timers',
     items: [
-      { type: 'TON', glyph: '[TON]', name: 'TON (On-Delay)', desc: 'Retardo a la conexión (IN, PT -> Q, ET)' },
-      { type: 'TOF', glyph: '[TOF]', name: 'TOF (Off-Delay)', desc: 'Retardo a la desconexión tras flanco' },
-      { type: 'TP', glyph: '[ TP ]', name: 'TP (Temporizador Pulso)', desc: 'Pulso exacto de duración PT' },
+      { type: 'TON', glyph: '[TON]', nameEs: 'TON (On-Delay)', nameEn: 'TON (On-Delay)', descEs: 'Retardo a la conexión (IN, PT -> Q, ET)', descEn: 'On-delay timer (IN, PT -> Q, ET)' },
+      { type: 'TOF', glyph: '[TOF]', nameEs: 'TOF (Off-Delay)', nameEn: 'TOF (Off-Delay)', descEs: 'Retardo a la desconexión tras flanco', descEn: 'Off-delay timer' },
+      { type: 'TP', glyph: '[ TP ]', nameEs: 'TP (Temporizador Pulso)', nameEn: 'TP (Pulse Timer)', descEs: 'Pulso exacto de duración PT', descEn: 'Fixed pulse duration PT' },
     ],
   },
   {
     id: 'counters',
-    title: 'Contadores IEC',
+    titleEs: 'Contadores IEC',
+    titleEn: 'IEC Counters',
     items: [
-      { type: 'CTU', glyph: '[CTU]', name: 'CTU (Ascendente)', desc: 'Cuenta flancos CU hasta PV (Reset R)' },
-      { type: 'CTD', glyph: '[CTD]', name: 'CTD (Descendente)', desc: 'Carga PV con LD y descuenta hasta 0' },
-      { type: 'CTUD', glyph: '[CTUD]', name: 'CTUD (Reversible)', desc: 'Contador bidireccional CU / CD' },
+      { type: 'CTU', glyph: '[CTU]', nameEs: 'CTU (Ascendente)', nameEn: 'CTU (Count Up)', descEs: 'Cuenta flancos CU hasta PV (Reset R)', descEn: 'Counts up on CU to PV (Reset R)' },
+      { type: 'CTD', glyph: '[CTD]', nameEs: 'CTD (Descendente)', nameEn: 'CTD (Count Down)', descEs: 'Carga PV con LD y descuenta hasta 0', descEn: 'Loads PV on LD and counts down to 0' },
+      { type: 'CTUD', glyph: '[CTUD]', nameEs: 'CTUD (Reversible)', nameEn: 'CTUD (Up/Down)', descEs: 'Contador bidireccional CU / CD', descEn: 'Bidirectional CU / CD counter' },
     ],
   },
   {
     id: 'comparators',
-    title: 'Comparadores Analógicos',
+    titleEs: 'Comparadores Analógicos',
+    titleEn: 'Analog Comparators',
     items: [
-      { type: 'GT', glyph: '[ > ]', name: 'Mayor que (GT)', desc: 'Activa si IN1 (%IW/%MW) > IN2' },
-      { type: 'GE', glyph: '[ >= ]', name: 'Mayor o igual (GE)', desc: 'Activa si IN1 >= IN2' },
-      { type: 'EQ', glyph: '[ == ]', name: 'Igual a (EQ)', desc: 'Activa si IN1 == IN2' },
-      { type: 'NE', glyph: '[ <> ]', name: 'Distinto de (NE)', desc: 'Activa si IN1 <> IN2' },
-      { type: 'LT', glyph: '[ < ]', name: 'Menor que (LT)', desc: 'Activa si IN1 < IN2' },
-      { type: 'LE', glyph: '[ <= ]', name: 'Menor o igual (LE)', desc: 'Activa si IN1 <= IN2' },
+      { type: 'GT', glyph: '[ > ]', nameEs: 'Mayor que (GT)', nameEn: 'Greater Than (GT)', descEs: 'Activa si IN1 (%IW/%MW) > IN2', descEn: 'True if IN1 (%IW/%MW) > IN2' },
+      { type: 'GE', glyph: '[ >= ]', nameEs: 'Mayor o igual (GE)', nameEn: 'Greater or Equal (GE)', descEs: 'Activa si IN1 >= IN2', descEn: 'True if IN1 >= IN2' },
+      { type: 'EQ', glyph: '[ == ]', nameEs: 'Igual a (EQ)', nameEn: 'Equal (EQ)', descEs: 'Activa si IN1 == IN2', descEn: 'True if IN1 == IN2' },
+      { type: 'NE', glyph: '[ <> ]', nameEs: 'Distinto de (NE)', nameEn: 'Not Equal (NE)', descEs: 'Activa si IN1 <> IN2', descEn: 'True if IN1 <> IN2' },
+      { type: 'LT', glyph: '[ < ]', nameEs: 'Menor que (LT)', nameEn: 'Less Than (LT)', descEs: 'Activa si IN1 < IN2', descEn: 'True if IN1 < IN2' },
+      { type: 'LE', glyph: '[ <= ]', nameEs: 'Menor o igual (LE)', nameEn: 'Less or Equal (LE)', descEs: 'Activa si IN1 <= IN2', descEn: 'True if IN1 <= IN2' },
     ],
   },
   {
     id: 'math',
-    title: 'Aritmética y Registros',
+    titleEs: 'Aritmética y Registros',
+    titleEn: 'Math & Registers',
     items: [
-      { type: 'MOVE', glyph: '[MOVE]', name: 'Transferir (MOVE)', desc: 'Copia %IW/C0.CV a Holding Reg %MW' },
-      { type: 'ADD', glyph: '[ADD]', name: 'Sumar (ADD)', desc: 'DEST := IN1 + IN2 (16-bit INT)' },
-      { type: 'SUB', glyph: '[SUB]', name: 'Restar (SUB)', desc: 'DEST := IN1 - IN2 (16-bit INT)' },
-      { type: 'MUL', glyph: '[MUL]', name: 'Multiplicar (MUL)', desc: 'DEST := IN1 * IN2 (Escalado)' },
-      { type: 'DIV', glyph: '[DIV]', name: 'Dividir (DIV)', desc: 'DEST := IN1 / IN2 (Entero)' },
+      { type: 'MOVE', glyph: '[MOVE]', nameEs: 'Transferir (MOVE)', nameEn: 'Move (MOVE)', descEs: 'Copia %IW/C0.CV a Holding Reg %MW', descEn: 'Copies %IW/C0.CV to %MW' },
+      { type: 'ADD', glyph: '[ADD]', nameEs: 'Sumar (ADD)', nameEn: 'Add (ADD)', descEs: 'DEST := IN1 + IN2 (16-bit INT)', descEn: 'DEST := IN1 + IN2 (16-bit INT)' },
+      { type: 'SUB', glyph: '[SUB]', nameEs: 'Restar (SUB)', nameEn: 'Subtract (SUB)', descEs: 'DEST := IN1 - IN2 (16-bit INT)', descEn: 'DEST := IN1 - IN2 (16-bit INT)' },
+      { type: 'MUL', glyph: '[MUL]', nameEs: 'Multiplicar (MUL)', nameEn: 'Multiply (MUL)', descEs: 'DEST := IN1 * IN2 (Escalado)', descEn: 'DEST := IN1 * IN2 (Scaling)' },
+      { type: 'DIV', glyph: '[DIV]', nameEs: 'Dividir (DIV)', nameEn: 'Divide (DIV)', descEs: 'DEST := IN1 / IN2 (Entero)', descEn: 'DEST := IN1 / IN2 (Integer)' },
     ],
   },
 ];
@@ -97,6 +104,7 @@ interface LeftLibrarySidebarProps {
 
 export const LeftLibrarySidebar: React.FC<LeftLibrarySidebarProps> = ({ width, onClose }) => {
   const {
+    uiLocale,
     rungs,
     selectedRungId,
     selectedElementId,
@@ -104,20 +112,17 @@ export const LeftLibrarySidebar: React.FC<LeftLibrarySidebarProps> = ({ width, o
     toggleParallelBranch,
     deleteElement,
     setWorkspaceView,
-    sendModbusTCPRequest,
-    sendModbusRTURequest,
-    captureI2CBusFrames,
   } = usePLCStore();
 
+  const isEn = uiLocale === 'en';
   const [search, setSearch] = useState('');
   const [openCats, setOpenCats] = useState<Record<string, boolean>>({
     contacts: true,
-    coils: false,
+    coils: true,
     timers: true,
     counters: false,
     comparators: false,
     math: false,
-    networks: true,
   });
 
   const activeRung = rungs.find((r) => r.id === selectedRungId) ?? rungs[0];
@@ -126,104 +131,111 @@ export const LeftLibrarySidebar: React.FC<LeftLibrarySidebarProps> = ({ width, o
     setOpenCats((prev) => ({ ...prev, [id]: !prev[id] }));
 
   return (
-    <aside
+    <nav
+      aria-label={isEn ? 'Components' : 'Componentes'}
       style={{ width }}
-      className="shrink-0 h-full bg-[#f4f6f8] flex flex-col select-none overflow-hidden"
+      className="shrink-0 h-full bg-[#f3f5f7] flex flex-col gap-2 p-2.5 select-none overflow-hidden"
     >
-      {/* Header with Close X Button */}
-      <div className="px-2.5 py-1.5 bg-[#eef2f6] border-b border-slate-300 flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
-          Librería de Bloques
-        </span>
+      {/* Top 4-button Tool Row (#toolbox) identical to Simulino + Close X */}
+      <div className="flex items-center gap-1">
+        <div className="grid grid-cols-4 gap-1 flex-1">
+          <button
+            onClick={() => setWorkspaceView('schematic')}
+            className="flex flex-col items-center gap-0.5 py-1 px-0.5 rounded-[4px] border border-[#0b6b78] bg-[#d4e9ec] text-[#1a2732] text-[10.5px] leading-tight cursor-pointer"
+          >
+            <MousePointer className="w-4 h-4 text-[#0b6b78]" />
+            <span>{isEn ? 'Move' : 'Mover'}</span>
+          </button>
+
+          <button
+            onClick={() => activeRung && toggleParallelBranch(activeRung.id, '%QX0.0')}
+            className="flex flex-col items-center gap-0.5 py-1 px-0.5 rounded-[4px] border border-[#cbd3db] hover:border-[#0b6b78] bg-[#fbfcfd] text-[#1a2732] text-[10.5px] leading-tight cursor-pointer"
+            title={isEn ? 'Toggle parallel OR branch' : 'Conmutar rama paralela OR'}
+          >
+            <GitBranch className="w-4 h-4" />
+            <span>{isEn ? 'Wire' : 'Cable'}</span>
+          </button>
+
+          <button
+            onClick={() => setWorkspaceView('twin2d')}
+            className="flex flex-col items-center gap-0.5 py-1 px-0.5 rounded-[4px] border border-[#cbd3db] hover:border-[#0b6b78] bg-[#fbfcfd] text-[#1a2732] text-[10.5px] leading-tight cursor-pointer"
+            title={isEn ? 'Open 2D Plant Twin' : 'Abrir Gemelo 2D de Planta'}
+          >
+            <Activity className="w-4 h-4" />
+            <span>{isEn ? 'Probe' : 'Sonda'}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (activeRung && selectedElementId) {
+                deleteElement(activeRung.id, selectedElementId);
+              }
+            }}
+            className="flex flex-col items-center gap-0.5 py-1 px-0.5 rounded-[4px] border border-[#cbd3db] hover:border-[#ae2c2c] bg-[#fbfcfd] text-[#1a2732] text-[10.5px] leading-tight cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>{isEn ? 'Delete' : 'Borrar'}</span>
+          </button>
+        </div>
+
         <button
           onClick={onClose}
-          title="Cerrar ventana de librería (Activar en menú Ver)"
-          className="p-1 rounded hover:bg-rose-100 text-slate-500 hover:text-rose-700 cursor-pointer transition-colors"
+          title={isEn ? 'Hide components panel (View → Components panel)' : 'Ocultar panel (Ver → Panel de componentes)'}
+          className="p-1 rounded hover:bg-[#cbd3db] text-[#5a6875] hover:text-[#18232e] cursor-pointer self-start"
         >
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      {/* 3 Top Tool Buttons */}
-      <div className="p-2 grid grid-cols-3 gap-1.5 border-b border-slate-200 bg-[#f8fafc]">
-        <button
-          onClick={() => setWorkspaceView('schematic')}
-          className="flex flex-col items-center justify-center py-1.5 px-1 rounded border border-[#0f766e] bg-[#ccfbf1]/50 text-[#0f766e] text-[11px] font-medium cursor-pointer"
-          title="Seleccionar y editar elementos del diagrama"
-        >
-          <MousePointer className="w-4 h-4 mb-0.5" />
-          <span>Editar</span>
-        </button>
+      {/* Search Box (#search) identical to Simulino */}
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={isEn ? 'Search components  ( / )' : 'Buscar componente  ( / )'}
+        spellCheck={false}
+        autoComplete="off"
+        className="w-full px-2.5 py-1 rounded-[4px] border border-[#cbd3db] focus:border-[#0b6b78] bg-[#fbfcfd] text-[13px] text-[#18232e] placeholder:text-[#5a6875] focus:outline-none"
+      />
 
-        <button
-          onClick={() => activeRung && toggleParallelBranch(activeRung.id, '%QX0.0')}
-          className="flex flex-col items-center justify-center py-1.5 px-1 rounded border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-medium cursor-pointer"
-          title="Añadir o quitar rama paralela OR (Enclavamiento)"
-        >
-          <GitBranch className="w-4 h-4 mb-0.5 text-slate-600" />
-          <span>Rama OR</span>
-        </button>
-
-        <button
-          onClick={() => {
-            if (activeRung && selectedElementId) {
-              deleteElement(activeRung.id, selectedElementId);
-            }
-          }}
-          className="flex flex-col items-center justify-center py-1.5 px-1 rounded border border-slate-300 bg-white hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-700 text-[11px] font-medium cursor-pointer"
-          title="Borrar bloque seleccionado"
-        >
-          <Trash2 className="w-4 h-4 mb-0.5" />
-          <span>Borrar</span>
-        </button>
-      </div>
-
-      {/* Search Box */}
-      <div className="p-2 border-b border-slate-200 bg-[#f8fafc]">
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar bloque o red ( / )"
-            className="w-full pl-8 pr-2.5 py-1.5 rounded border border-slate-300 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-[#0f766e]"
-          />
-        </div>
-      </div>
-
-      {/* Categorized Accordion List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-slate-200/80">
+      {/* Categorized Accordion List (#catalog) identical to Simulino */}
+      <div className="flex-1 overflow-y-auto flex flex-col gap-1 -mx-1 px-1">
         {CATEGORIES.map((cat) => {
-          const filtered = cat.items.filter(
-            (i) =>
-              !search.trim() ||
-              i.name.toLowerCase().includes(search.toLowerCase()) ||
-              i.desc.toLowerCase().includes(search.toLowerCase()) ||
-              i.type.toLowerCase().includes(search.toLowerCase())
-          );
+          const title = isEn ? cat.titleEn : cat.titleEs;
+          const filtered = cat.items.filter((i) => {
+            if (!search.trim()) return true;
+            const q = search.toLowerCase();
+            return (
+              i.nameEs.toLowerCase().includes(q) ||
+              i.nameEn.toLowerCase().includes(q) ||
+              i.descEs.toLowerCase().includes(q) ||
+              i.descEn.toLowerCase().includes(q) ||
+              i.type.toLowerCase().includes(q)
+            );
+          });
           if (search.trim() && filtered.length === 0) return null;
           const isOpen = search.trim() ? true : !!openCats[cat.id];
 
           return (
-            <div key={cat.id} className="bg-[#f4f6f8]">
+            <div key={cat.id} className="shrink-0">
               <button
                 onClick={() => toggleCat(cat.id)}
-                className="w-full px-3 py-2 flex items-center justify-between text-xs font-semibold text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                style={{ font: '600 14px/1.1 var(--display)', letterSpacing: '0.03em' }}
+                className="w-full py-1.5 px-1 flex items-center justify-between border-b border-[#cbd3db] text-[#18232e] cursor-pointer"
               >
-                <span className="flex items-center gap-1.5 truncate">
-                  {isOpen ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  )}
-                  <span className="truncate">{cat.title}</span>
+                <span className="flex items-center">
+                  <span className="inline-block w-3.5 text-[11px] text-[#5a6875] text-left">
+                    {isOpen ? '▾' : '▸'}
+                  </span>
+                  <span>{title}</span>
                 </span>
-                <span className="text-[11px] font-normal text-slate-500">{filtered.length}</span>
+                <em className="not-italic font-mono text-[11px] font-normal text-[#5a6875]">
+                  {filtered.length}
+                </em>
               </button>
 
               {isOpen && (
-                <div className="px-2 pb-2 space-y-1 bg-white/70">
+                <div className="py-1 flex flex-col gap-0.5">
                   {filtered.map((item) => (
                     <button
                       key={item.type}
@@ -231,17 +243,19 @@ export const LeftLibrarySidebar: React.FC<LeftLibrarySidebarProps> = ({ width, o
                         setWorkspaceView('schematic');
                         if (activeRung) addElementToRung(activeRung.id, item.type);
                       }}
-                      className="w-full p-1.5 rounded hover:bg-teal-50/80 border border-transparent hover:border-teal-200 flex items-center gap-2.5 text-left transition-all cursor-pointer group"
+                      className="w-full grid grid-cols-[44px_minmax(0,1fr)] gap-2 items-center text-left py-1 px-1 rounded-[4px] border border-transparent hover:border-[#0b6b78] hover:bg-[#fbfcfd] text-[#1a2732] cursor-pointer"
                     >
-                      <div className="w-11 h-7 shrink-0 rounded bg-slate-100 group-hover:bg-teal-100/70 border border-slate-300 flex items-center justify-center font-mono text-[10px] font-bold text-[#0f766e]">
+                      <span className="h-[22px] rounded-[3px] bg-[#fbfcfd] border border-[#cbd3db] flex items-center justify-center font-mono text-[10px] font-medium text-[#0b6b78]">
                         {item.glyph}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold text-slate-800 truncate">
-                          {item.name}
-                        </div>
-                        <div className="text-[10px] text-slate-500 truncate">{item.desc}</div>
-                      </div>
+                      </span>
+                      <span className="min-w-0">
+                        <b className="block font-medium text-[12.5px] leading-tight truncate">
+                          {isEn ? item.nameEn : item.nameEs}
+                        </b>
+                        <small className="block text-[10.5px] text-[#5a6875] leading-tight truncate">
+                          {isEn ? item.descEn : item.descEs}
+                        </small>
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -249,98 +263,7 @@ export const LeftLibrarySidebar: React.FC<LeftLibrarySidebarProps> = ({ width, o
             </div>
           );
         })}
-
-        {/* Industrial Networks Quick Actions Category */}
-        <div className="bg-[#f4f6f8]">
-          <button
-            onClick={() => toggleCat('networks')}
-            className="w-full px-3 py-2 flex items-center justify-between text-xs font-semibold text-slate-800 hover:bg-slate-200/60 transition-colors cursor-pointer"
-          >
-            <span className="flex items-center gap-1.5 truncate">
-              {openCats.networks ? (
-                <ChevronDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              ) : (
-                <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-              )}
-              <span className="truncate">Redes Industriales KC868</span>
-            </span>
-            <span className="text-[11px] font-normal text-slate-500">4</span>
-          </button>
-
-          {openCats.networks && (
-            <div className="px-2 pb-2.5 space-y-1 bg-white/70">
-              <button
-                onClick={() => {
-                  sendModbusTCPRequest(1, 0, 8);
-                  setWorkspaceView('networks');
-                }}
-                className="w-full p-1.5 rounded hover:bg-teal-50 border border-transparent hover:border-teal-200 flex items-center gap-2.5 text-left cursor-pointer"
-              >
-                <div className="w-11 h-7 shrink-0 rounded bg-teal-50 border border-teal-300 flex items-center justify-center font-mono text-[10px] font-bold text-teal-800">
-                  TCP
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-800">Modbus TCP (502)</div>
-                  <div className="text-[10px] text-slate-500 truncate">
-                    Trama MBAP + PDU sobre LAN8720
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  sendModbusRTURequest(3, 0, 4);
-                  setWorkspaceView('networks');
-                }}
-                className="w-full p-1.5 rounded hover:bg-amber-50 border border-transparent hover:border-amber-200 flex items-center gap-2.5 text-left cursor-pointer"
-              >
-                <div className="w-11 h-7 shrink-0 rounded bg-amber-50 border border-amber-300 flex items-center justify-center font-mono text-[10px] font-bold text-amber-800">
-                  RS485
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-800">Modbus RTU (CRC16)</div>
-                  <div className="text-[10px] text-slate-500 truncate">
-                    GPIO16 RX / GPIO13 TX · Par trenzado
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  captureI2CBusFrames();
-                  setWorkspaceView('networks');
-                }}
-                className="w-full p-1.5 rounded hover:bg-indigo-50 border border-transparent hover:border-indigo-200 flex items-center gap-2.5 text-left cursor-pointer"
-              >
-                <div className="w-11 h-7 shrink-0 rounded bg-indigo-50 border border-indigo-300 flex items-center justify-center font-mono text-[10px] font-bold text-indigo-800">
-                  I²C
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-800">Bus I²C 4×PCF8574</div>
-                  <div className="text-[10px] text-slate-500 truncate">
-                    0x22, 0x21, 0x24, 0x25 (400 kHz)
-                  </div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setWorkspaceView('networks')}
-                className="w-full p-1.5 rounded hover:bg-purple-50 border border-transparent hover:border-purple-200 flex items-center gap-2.5 text-left cursor-pointer"
-              >
-                <div className="w-11 h-7 shrink-0 rounded bg-purple-50 border border-purple-300 flex items-center justify-center font-mono text-[10px] font-bold text-purple-800">
-                  MQTT
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-slate-800">MQTT Sparkplug B</div>
-                  <div className="text-[10px] text-slate-500 truncate">
-                    IIoT Broker & Mapa SCADA OpenPLC
-                  </div>
-                </div>
-              </button>
-            </div>
-          )}
-        </div>
       </div>
-    </aside>
+    </nav>
   );
 };
