@@ -19,11 +19,15 @@ import { LadderEditor } from './components/LadderEditor';
 import { STEditor } from './components/STEditor';
 import { BoardSimulator } from './components/BoardSimulator';
 import { IndustrialNetworksLab } from './components/IndustrialNetworksLab';
+import { GrafcetEditor } from './components/GrafcetEditor';
+import { PlantTwin2D } from './components/PlantTwin2D';
+import { ApiAndMcpHub } from './components/ApiAndMcpHub';
 import { BottomConsole } from './components/BottomConsole';
 import { ExportModal } from './components/ExportModal';
 import { ExamplesModal } from './components/ExamplesModal';
 import { PLC_EXAMPLES, PlnoProjectFile } from './utils/plcExamples';
 import { PLCLanguage, ScanFrequency } from './types/plc';
+import { initPclinoGlobalApi } from './sdk/pclinoApi';
 
 type OpenMenuId = 'archivo' | 'editar' | 'ver' | 'simulacion' | 'redes' | 'ayuda' | null;
 
@@ -80,6 +84,11 @@ export const App: React.FC = () => {
   const draggingRef = useRef<'left' | 'right' | 'bottom' | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const menuBarRef = useRef<HTMLDivElement | null>(null);
+
+  // Initialize Global Public SDK API (window.pclino)
+  useEffect(() => {
+    initPclinoGlobalApi();
+  }, []);
 
   // Deterministic Scan Cycle
   useEffect(() => {
@@ -588,10 +597,10 @@ export const App: React.FC = () => {
 
           {/* Right: Segmented View Switcher + .plno Filename + Simular CTA */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="flex items-center bg-white rounded-md border border-slate-300 p-0.5 shadow-2xs">
+            <div className="flex items-center bg-white rounded-md border border-slate-300 p-0.5 shadow-2xs flex-wrap">
               <button
                 onClick={() => setWorkspaceView('schematic')}
-                className={`px-3 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
                   workspaceView === 'schematic'
                     ? 'bg-[#0f766e] text-white'
                     : 'text-slate-600 hover:text-slate-900'
@@ -600,8 +609,28 @@ export const App: React.FC = () => {
                 Esquemático PLC
               </button>
               <button
+                onClick={() => setWorkspaceView('grafcet')}
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+                  workspaceView === 'grafcet'
+                    ? 'bg-[#0f766e] text-white'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                GRAFCET (SFC)
+              </button>
+              <button
+                onClick={() => setWorkspaceView('twin2d')}
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+                  workspaceView === 'twin2d'
+                    ? 'bg-[#0f766e] text-white'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Gemelo 2D Planta
+              </button>
+              <button
                 onClick={() => setWorkspaceView('networks')}
-                className={`px-3 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
                   workspaceView === 'networks'
                     ? 'bg-[#0f766e] text-white'
                     : 'text-slate-600 hover:text-slate-900'
@@ -611,13 +640,23 @@ export const App: React.FC = () => {
               </button>
               <button
                 onClick={() => setWorkspaceView('board')}
-                className={`px-3 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
                   workspaceView === 'board'
                     ? 'bg-[#0f766e] text-white'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 Placa KC868-A16
+              </button>
+              <button
+                onClick={() => setWorkspaceView('api_mcp')}
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
+                  workspaceView === 'api_mcp'
+                    ? 'bg-[#ea580c] text-white'
+                    : 'text-[#ea580c] hover:bg-orange-50'
+                }`}
+              >
+                API & MCP
               </button>
             </div>
 
@@ -730,7 +769,13 @@ export const App: React.FC = () => {
           <div className="px-3 py-1.5 rounded-t-md bg-white border-t border-x border-slate-300 font-medium text-slate-800 flex items-center gap-2 -mb-px">
             <span>
               {workspaceView === 'networks'
-                ? 'Redes Industriales: Modbus TCP / RS485 RTU / I²C PCF8574'
+                ? 'Redes Industriales: Modbus TCP / RS485 RTU / HART / DeviceNet / OPC UA / I²C'
+                : workspaceView === 'grafcet'
+                ? 'Editor Gráfico GRAFCET / SFC (IEC 61131-3)'
+                : workspaceView === 'twin2d'
+                ? 'Gemelo Digital 2D de Planta Industrial (Lazo Cerrado)'
+                : workspaceView === 'api_mcp'
+                ? 'API Pública (window.pclino) & Servidor MCP (Model Context Protocol)'
                 : workspaceView === 'board'
                 ? 'Hardware: Placa KinCony KC868-A16 (ESP32)'
                 : `${projectFileName} — ${language === 'LD' ? 'Diagrama Ladder' : 'Structured Text'}`}
@@ -800,9 +845,15 @@ export const App: React.FC = () => {
 
         {/* Center Window + Resizable Bottom Console */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden flex flex-col">
             {workspaceView === 'networks' ? (
               <IndustrialNetworksLab />
+            ) : workspaceView === 'grafcet' ? (
+              <GrafcetEditor />
+            ) : workspaceView === 'twin2d' ? (
+              <PlantTwin2D />
+            ) : workspaceView === 'api_mcp' ? (
+              <ApiAndMcpHub />
             ) : workspaceView === 'board' ? (
               <BoardSimulator />
             ) : language === 'LD' ? (
