@@ -7,10 +7,13 @@ import {
   LadderElementType,
   LadderRung,
   LogEntry,
+  NetworkTransaction,
+  OscilloscopeSample,
   PLCLanguage,
   ScanFrequency,
   TimerBlockState,
   VariableSymbol,
+  WorkspaceView,
 } from '../types/plc';
 import {
   DEFAULT_LADDER_RUNGS,
@@ -25,9 +28,16 @@ import {
   validateSTCode,
 } from '../engine/plcEngine';
 import { generateSTFromLadder } from '../utils/codeExporter';
+import {
+  buildI2CTransaction,
+  executeModbusRTUTransaction,
+  executeModbusTCPTransaction,
+} from '../utils/industrialNetworks';
 
 interface PLCStoreState {
+  workspaceView: WorkspaceView;
   language: PLCLanguage;
+  activeSheet: number;
   isRunning: boolean;
   scanFreq: ScanFrequency;
   scanCount: number;
@@ -35,14 +45,23 @@ interface PLCStoreState {
 
   // Process image memory
   inputs: boolean[];
-  momentaryMask: boolean[]; // True = push button (momentary), False = selector switch (maintained)
+  momentaryMask: boolean[];
   outputs: boolean[];
   markers: boolean[];
   words: number[];
-  analogs: number[];        // 4 ADC channels A1..A4 (0..4095)
+  analogs: number[];        // 8 Input Words: %IW0..3 (ADC A1..4), %IW4..6 (HT1..3 1-Wire), %IW7 (RF433)
   timers: Record<string, TimerBlockState>;
   counters: Record<string, CounterBlockState>;
+  edgeMemory: Record<string, boolean>;
   symbols: VariableSymbol[];
+
+  // Oscilloscope & Probes (Simulino style)
+  oscSamples: OscilloscopeSample[];
+  activeProbes: string[];
+
+  // Industrial Network Frame Log (Modbus TCP, RS485 RTU, I2C PCF8574)
+  networkTransactions: NetworkTransaction[];
+  modbusTxSeq: number;
 
   // Programs
   rungs: LadderRung[];
@@ -59,7 +78,9 @@ interface PLCStoreState {
   hwConnected: boolean;
 
   // Actions
+  setWorkspaceView: (view: WorkspaceView) => void;
   setLanguage: (lang: PLCLanguage) => void;
+  setActiveSheet: (sheet: number) => void;
   setRunning: (run: boolean) => void;
   setScanFreq: (freq: ScanFrequency) => void;
   stepSingleScan: () => void;
@@ -71,6 +92,17 @@ interface PLCStoreState {
   toggleMomentaryMode: (index: number) => void;
   setAnalogChannel: (ch: number, value: number) => void;
   setWordValue: (index: number, value: number) => void;
+  setCoilValue: (index: number, value: boolean) => void;
+
+  // Oscilloscope actions
+  toggleProbe: (probeName: string) => void;
+  clearOscilloscope: () => void;
+
+  // Industrial Network actions
+  sendModbusTCPRequest: (fc: number, startAddr: number, quantityOrVal: number) => void;
+  sendModbusRTURequest: (fc: number, startAddr: number, quantityOrVal: number) => void;
+  captureI2CBusFrames: () => void;
+  clearNetworkTransactions: () => void;
 
   // Variable Symbol & Force actions
   updateSymbol: (address: string, patch: Partial<VariableSymbol>) => void;
@@ -103,13 +135,14 @@ interface PLCStoreState {
 
 const createInitialTimers = (): Record<string, TimerBlockState> => ({
   T0: { id: 'T0', type: 'TON', IN: false, Q: false, PT: 2500, ET: 0, startTime: null },
-  T1: { id: 'T1', type: 'TON', IN: false, Q: false, PT: 1000, ET: 0, startTime: null },
-  T2: { id: 'T2', type: 'TOF', IN: false, Q: false, PT: 1500, ET: 0, startTime: null },
+  T1: { id: 'T1', type: 'TOF', IN: false, Q: false, PT: 1500, ET: 0, startTime: null },
+  T2: { id: 'T2', type: 'TP', IN: false, Q: false, PT: 1000, ET: 0, startTime: null, prevIN: false },
 });
 
 const createInitialCounters = (): Record<string, CounterBlockState> => ({
-  C0: { id: 'C0', CU: false, R: false, Q: false, PV: 5, CV: 0, prevCU: false },
-  C1: { id: 'C1', CU: false, R: false, Q: false, PV: 10, CV: 0, prevCU: false },
+  C0: { id: 'C0', type: 'CTU', CU: false, R: false, Q: false, PV: 5, CV: 0, prevCU: false },
+  C1: { id: 'C1', type: 'CTD', CU: false, CD: false, R: false, LD: false, Q: false, PV: 5, CV: 5, prevCU: false, prevCD: false },
+  C2: { id: 'C2', type: 'CTUD', CU: false, CD: false, R: false, Q: false, QD: true, PV: 10, CV: 0, prevCU: false, prevCD: false },
 });
 
 const nowTimeStr = (): string => {
@@ -117,22 +150,49 @@ const nowTimeStr = (): string => {
   return d.toTimeString().split(' ')[0] + '.' + String(d.getMilliseconds()).padStart(3, '0');
 };
 
+const createSeedOscSamples = (): OscilloscopeSample[] => {
+  const arr: OscilloscopeSample[] = [];
+  for (let i = 0; i < 60; i++) {
+    arr.push({
+      timeSec: i * 0.05,
+      signals: {
+        '%IX0.0': 0,
+        '%QX0.0': 0,
+        '%QX0.1': 0,
+        'T0.ET': 0,
+        '%IW0': 1850,
+      },
+    });
+  }
+  return arr;
+};
+
 export const usePLCStore = create<PLCStoreState>((set, get) => ({
+  workspaceView: 'schematic',
   language: 'LD',
+  activeSheet: 0, // 0 = Todas las hojas, 1..3 = Hoja específica
   isRunning: false,
   scanFreq: 50,
   scanCount: 0,
-  lastScanUs: 42,
+  lastScanUs: 38,
 
   inputs: Array(16).fill(false),
   momentaryMask: [true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false],
   outputs: Array(16).fill(false),
   markers: Array(16).fill(false),
-  words: Array(16).fill(0),
-  analogs: [1240, 2048, 512, 3680],
+  words: [0, 2800, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  // %IW0..3 = ADC1..4 (0..4095), %IW4..6 = DS18B20/DHT22 (x0.1°C -> 245 = 24.5°C), %IW7 = RF433
+  analogs: [1850, 2048, 960, 3200, 245, 580, 228, 0],
   timers: createInitialTimers(),
   counters: createInitialCounters(),
+  edgeMemory: {},
   symbols: DEFAULT_SYMBOLS,
+
+  oscSamples: createSeedOscSamples(),
+  activeProbes: ['%IX0.0', '%QX0.0', 'T0.ET', '%IW0'],
+
+  networkTransactions: [],
+  modbusTxSeq: 1,
 
   rungs: DEFAULT_LADDER_RUNGS,
   stCode: DEFAULT_ST_CODE,
@@ -145,13 +205,13 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
       id: 'init-1',
       timestamp: nowTimeStr(),
       level: 'INFO',
-      message: 'OpenPLC A16 Studio inicializado. Target: KinCony KC868-A16 (ESP32 + 4x PCF8574 I2C).',
+      message: 'OpenPLC A16 Studio listo. Placa: KinCony KC868-A16 (ESP32 + 4×PCF8574 I2C + LAN8720 ETH + RS485).',
     },
     {
       id: 'init-2',
       timestamp: nowTimeStr(),
-      level: 'INFO',
-      message: 'Mapeo HAL I2C listo: DI1..8 (0x22), DI9..16 (0x21), DO1..8 (0x24), DO9..16 (0x25).',
+      level: 'NET',
+      message: 'Laboratorio de Redes Industriales activo: Modbus TCP (502), Modbus RTU RS485 (CRC-16), I2C (0x22..0x25) y MQTT Sparkplug B.',
     },
   ],
 
@@ -160,6 +220,10 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
     wsUrl: 'ws://192.168.1.50:81',
     modbusIp: '192.168.1.50',
     modbusPort: 502,
+    rs485BaudRate: 9600,
+    rs485SlaveId: 1,
+    mqttBroker: 'mqtt://192.168.1.10:1883',
+    mqttTopicPrefix: 'spBv1.0/KinConyPlanta/NDATA/KC868_A16',
     useEthernet: true,
     i2cSdaPin: 4,
     i2cSclPin: 5,
@@ -170,44 +234,44 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
   },
   hwConnected: false,
 
+  setWorkspaceView: (view) => set({ workspaceView: view }),
+
   setLanguage: (lang) => {
     set({ language: lang });
-    get().addLog('INFO', `Lenguaje activo cambiado a ${lang === 'LD' ? 'Ladder Diagram (LD)' : 'Structured Text (ST)'}.`);
+    get().addLog('INFO', `Vista de programación cambiada a ${lang}.`);
   },
+
+  setActiveSheet: (sheet) => set({ activeSheet: sheet }),
 
   setRunning: (run) => {
     if (run) {
       const ok = get().compileProgram();
       if (!ok) {
-        get().addLog('ERROR', 'No se puede iniciar RUN: existen errores de compilación en el programa.');
+        get().addLog('ERROR', 'No se puede iniciar Simulación: existen errores en el programa.');
         return;
       }
       set({ isRunning: true });
-      get().addLog('SCAN', `PLC en modo RUN (${get().scanFreq} Hz / ciclo determinista de ${1000 / get().scanFreq} ms).`);
+      get().addLog('SCAN', `Simulación en tiempo real iniciada (${get().scanFreq} Hz).`);
     } else {
       set({ isRunning: false });
-      get().addLog('SCAN', 'PLC en modo STOP. Salidas mantenidas en estado seguro.');
+      get().addLog('SCAN', 'Simulación detenida.');
     }
   },
 
-  setScanFreq: (freq) => {
-    set({ scanFreq: freq });
-    get().addLog('INFO', `Frecuencia de muestreo ajustada a ${freq} Hz (${1000 / freq} ms).`);
-  },
+  setScanFreq: (freq) => set({ scanFreq: freq }),
 
   stepSingleScan: () => {
     const state = get();
     const t0 = performance.now();
 
-    // Clone memory for deterministic scan evaluation
     const nextInputs = [...state.inputs];
     const nextOutputs = [...state.outputs];
     const nextMarkers = [...state.markers];
     const nextWords = [...state.words];
     const nextTimers = { ...state.timers };
     const nextCounters = { ...state.counters };
+    const nextEdges = { ...state.edgeMemory };
 
-    // Apply forced inputs before scan
     state.symbols.forEach((sym) => {
       if (sym.forced && sym.forcedValue !== undefined) {
         const parsed = iecAddressToIndex(sym.address);
@@ -222,21 +286,21 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
       outputs: nextOutputs,
       markers: nextMarkers,
       words: nextWords,
+      analogs: state.analogs,
       timers: nextTimers,
       counters: nextCounters,
+      edgeMemory: nextEdges,
       symbols: state.symbols,
     };
 
     let nextRungs = state.rungs;
-    if (state.language === 'LD') {
+    if (state.language === 'ST') {
+      executeSTScan(state.stCode, mem, t0);
       nextRungs = executeLadderScan(state.rungs, mem, t0);
     } else {
-      executeSTScan(state.stCode, mem, t0);
-      // Also update Ladder visual power state so switching tabs keeps live telemetry
       nextRungs = executeLadderScan(state.rungs, mem, t0);
     }
 
-    // Apply forced outputs/markers/words after scan
     state.symbols.forEach((sym) => {
       if (sym.forced && sym.forcedValue !== undefined) {
         const parsed = iecAddressToIndex(sym.address);
@@ -250,7 +314,25 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
       }
     });
 
-    const elapsedUs = Math.max(12, Math.round((performance.now() - t0) * 1000));
+    const elapsedUs = Math.max(14, Math.round((performance.now() - t0) * 1000));
+    const nextScanCount = state.scanCount + 1;
+
+    // Record oscilloscope sample
+    const lastTime = state.oscSamples[state.oscSamples.length - 1]?.timeSec ?? 0;
+    const newSample: OscilloscopeSample = {
+      timeSec: Number((lastTime + 1 / state.scanFreq).toFixed(3)),
+      signals: {
+        '%IX0.0': mem.inputs[0] ? 1 : 0,
+        '%IX0.2': mem.inputs[2] ? 1 : 0,
+        '%QX0.0': mem.outputs[0] ? 1 : 0,
+        '%QX0.1': mem.outputs[1] ? 1 : 0,
+        '%QX0.2': mem.outputs[2] ? 1 : 0,
+        '%QX0.4': mem.outputs[4] ? 1 : 0,
+        'T0.ET': Math.round(mem.timers.T0?.ET ?? 0),
+        '%IW0': state.analogs[0] ?? 0,
+        '%MW0': mem.words[0] ?? 0,
+      },
+    };
 
     set({
       inputs: mem.inputs,
@@ -259,9 +341,11 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
       words: mem.words,
       timers: mem.timers,
       counters: mem.counters,
+      edgeMemory: nextEdges,
       rungs: nextRungs,
-      scanCount: state.scanCount + 1,
+      scanCount: nextScanCount,
       lastScanUs: elapsedUs,
+      oscSamples: [...state.oscSamples.slice(-119), newSample],
     });
   },
 
@@ -272,9 +356,11 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
       inputs: Array(16).fill(false),
       outputs: Array(16).fill(false),
       markers: Array(16).fill(false),
-      words: Array(16).fill(0),
+      words: [0, 2800, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       timers: createInitialTimers(),
       counters: createInitialCounters(),
+      edgeMemory: {},
+      oscSamples: createSeedOscSamples(),
       rungs: get().rungs.map((r) => ({
         ...r,
         energized: false,
@@ -287,16 +373,14 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
         })),
       })),
     });
-    get().addLog('WARN', 'Memoria de imagen de proceso (%IX, %QX, %MX, %MW, T, C) reiniciada a cero.');
+    get().addLog('WARN', 'Memoria de imagen de proceso y osciloscopio reiniciados.');
   },
 
   toggleInput: (index) => {
     const next = [...get().inputs];
     next[index] = !next[index];
     set({ inputs: next });
-    if (!get().isRunning) {
-      get().stepSingleScan();
-    }
+    if (!get().isRunning) get().stepSingleScan();
   },
 
   setInputState: (index, val) => {
@@ -304,9 +388,7 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
     const next = [...get().inputs];
     next[index] = val;
     set({ inputs: next });
-    if (!get().isRunning) {
-      get().stepSingleScan();
-    }
+    if (!get().isRunning) get().stepSingleScan();
   },
 
   toggleMomentaryMode: (index) => {
@@ -319,6 +401,7 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
     const next = [...get().analogs];
     next[ch] = Math.max(0, Math.min(4095, value));
     set({ analogs: next });
+    if (!get().isRunning) get().stepSingleScan();
   },
 
   setWordValue: (index, value) => {
@@ -326,6 +409,94 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
     next[index] = value;
     set({ words: next });
   },
+
+  setCoilValue: (index, value) => {
+    const next = [...get().outputs];
+    next[index] = value;
+    set({ outputs: next });
+  },
+
+  toggleProbe: (probeName) => {
+    const cur = get().activeProbes;
+    if (cur.includes(probeName)) {
+      if (cur.length > 1) {
+        set({ activeProbes: cur.filter((p) => p !== probeName) });
+      }
+    } else {
+      set({ activeProbes: [...cur, probeName] });
+    }
+  },
+
+  clearOscilloscope: () => set({ oscSamples: createSeedOscSamples() }),
+
+  sendModbusTCPRequest: (fc, startAddr, quantityOrVal) => {
+    const state = get();
+    const seq = state.modbusTxSeq;
+    const { request, response } = executeModbusTCPTransaction(
+      seq,
+      state.hwConfig.rs485SlaveId,
+      fc,
+      startAddr,
+      quantityOrVal,
+      {
+        inputs: state.inputs,
+        outputs: state.outputs,
+        analogs: state.analogs,
+        words: state.words,
+        writeCoil: (idx, val) => state.setCoilValue(idx, val),
+        writeWord: (idx, val) => state.setWordValue(idx, val),
+      }
+    );
+    set({
+      modbusTxSeq: seq + 1,
+      networkTransactions: [response, request, ...state.networkTransactions.slice(0, 48)],
+    });
+    get().addLog('NET', `Modbus TCP [TxID=${seq}]: ${request.rawHex} -> ${response.rawHex}`);
+  },
+
+  sendModbusRTURequest: (fc, startAddr, quantityOrVal) => {
+    const state = get();
+    const { request, response } = executeModbusRTUTransaction(
+      state.hwConfig.rs485SlaveId,
+      fc,
+      startAddr,
+      quantityOrVal,
+      {
+        inputs: state.inputs,
+        outputs: state.outputs,
+        analogs: state.analogs,
+        words: state.words,
+        writeCoil: (idx, val) => state.setCoilValue(idx, val),
+        writeWord: (idx, val) => state.setWordValue(idx, val),
+      }
+    );
+    set({
+      networkTransactions: [response, request, ...state.networkTransactions.slice(0, 48)],
+    });
+    get().addLog('NET', `RS485 Modbus RTU: ${request.rawHex} -> ${response.rawHex}`);
+  },
+
+  captureI2CBusFrames: () => {
+    const state = get();
+    const calcByte = (bits: boolean[], offset: number) => {
+      let b = 0xff;
+      for (let i = 0; i < 8; i++) {
+        if (bits[offset + i]) b &= ~(1 << i);
+      }
+      return b;
+    };
+    const f1 = buildI2CTransaction('PCF8574_DI_1_8', state.hwConfig.pcfIn1Addr, true, calcByte(state.inputs, 0));
+    const f2 = buildI2CTransaction('PCF8574_DI_9_16', state.hwConfig.pcfIn2Addr, true, calcByte(state.inputs, 8));
+    const f3 = buildI2CTransaction('PCF8574_DO_1_8', state.hwConfig.pcfOut1Addr, false, calcByte(state.outputs, 0));
+    const f4 = buildI2CTransaction('PCF8574_DO_9_16', state.hwConfig.pcfOut2Addr, false, calcByte(state.outputs, 8));
+
+    set({
+      networkTransactions: [f4, f3, f2, f1, ...state.networkTransactions.slice(0, 46)],
+    });
+    get().addLog('NET', 'Capturadas 4 tramas I2C a 400 kHz de los expansores PCF8574 (0x22, 0x21, 0x24, 0x25).');
+  },
+
+  clearNetworkTransactions: () => set({ networkTransactions: [] }),
 
   updateSymbol: (address, patch) => {
     set({
@@ -337,7 +508,6 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
     const exists = get().symbols.some((s) => s.address.toUpperCase() === symbol.address.toUpperCase());
     if (exists) return;
     set({ symbols: [...get().symbols, symbol] });
-    get().addLog('INFO', `Símbolo agregado: ${symbol.name} (${symbol.address}).`);
   },
 
   toggleForceVariable: (address, forcedValue) => {
@@ -362,17 +532,18 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
   addRung: () => {
     const current = get().rungs;
     const nextNum = current.length + 1;
+    const sheet = get().activeSheet === 0 ? 1 : get().activeSheet;
     const newRung: LadderRung = {
       id: `rung-${Date.now()}`,
       number: nextNum,
+      sheet,
       comment: `Rung ${nextNum}: Lógica de control auxiliar`,
       elements: [
         { id: `el-${Date.now()}-1`, type: 'NO', variable: '%IX0.6', label: 'AUX_IN' },
-        { id: `el-${Date.now()}-2`, type: 'COIL', variable: '%QX0.4', label: 'AUX_RELAY' },
+        { id: `el-${Date.now()}-2`, type: 'COIL', variable: '%QX0.5', label: 'AUX_OUT' },
       ],
     };
     set({ rungs: [...current, newRung], selectedRungId: newRung.id });
-    get().addLog('INFO', `Rung #${nextNum} añadido al diagrama Ladder.`);
   },
 
   deleteRung: (rungId) => {
@@ -384,7 +555,6 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
       selectedRungId: filtered[0]?.id ?? null,
       selectedElementId: null,
     });
-    get().addLog('WARN', `Rung eliminado del diagrama Ladder.`);
   },
 
   updateRungComment: (rungId, comment) => {
@@ -397,33 +567,59 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
     const defaultVarByType: Record<LadderElementType, string> = {
       NO: '%IX0.0',
       NC: '%IX0.1',
+      R_TRIG: '%IX0.2',
+      F_TRIG: '%IX0.2',
       COIL: '%QX0.0',
+      NEG_COIL: '%QX0.5',
       SET: '%QX0.3',
       RESET: '%QX0.3',
-      TON: 'T1',
-      TOF: 'T2',
-      CTU: 'C1',
+      SR: '%QX0.3',
+      RS: '%QX0.3',
+      TON: 'T0',
+      TOF: 'T1',
+      TP: 'T2',
+      CTU: 'C0',
+      CTD: 'C1',
+      CTUD: 'C2',
+      EQ: '%IW0',
+      NE: '%IW0',
+      GT: '%IW0',
+      GE: '%IW0',
+      LT: '%IW0',
+      LE: '%IW0',
+      ADD: '%MW0',
+      SUB: '%MW0',
+      MUL: '%MW0',
+      DIV: '%MW0',
+      MOVE: 'C0.CV',
     };
+
+    const isComparator = ['EQ', 'NE', 'GT', 'GE', 'LT', 'LE'].includes(type);
+    const isMath = ['ADD', 'SUB', 'MUL', 'DIV', 'MOVE'].includes(type);
 
     const newEl: LadderElement = {
       id: `el-${Date.now()}`,
       type,
       variable: defaultVarByType[type],
       label: type,
-      ...(type === 'TON' || type === 'TOF' ? { presetMs: 2000 } : {}),
-      ...(type === 'CTU' ? { presetCount: 5, resetVariable: '%IX0.3' } : {}),
+      ...(type === 'TON' || type === 'TOF' || type === 'TP' ? { presetMs: 2000 } : {}),
+      ...(type === 'CTU' || type === 'CTD' || type === 'CTUD'
+        ? { presetCount: 5, resetVariable: '%IX0.3', auxVariable: '%IX0.7' }
+        : {}),
+      ...(type === 'SR' || type === 'RS' ? { resetVariable: '%IX0.5' } : {}),
+      ...(isComparator ? { auxVariable: '2500' } : {}),
+      ...(isMath ? { auxVariable: '10', destVariable: '%MW0' } : {}),
     };
 
     set({
       rungs: get().rungs.map((r) => {
         if (r.id !== rungId) return r;
-        const isCoil = type === 'COIL' || type === 'SET' || type === 'RESET';
-        if (isCoil) {
+        const isOutputCoil = ['COIL', 'NEG_COIL', 'SET', 'RESET', 'SR', 'RS'].includes(type);
+        if (isOutputCoil) {
           return { ...r, elements: [...r.elements, newEl] };
         }
-        // Insert before first coil so coils stay on the right side of the rung
-        const coilIdx = r.elements.findIndex(
-          (e) => e.type === 'COIL' || e.type === 'SET' || e.type === 'RESET'
+        const coilIdx = r.elements.findIndex((e) =>
+          ['COIL', 'NEG_COIL', 'SET', 'RESET', 'SR', 'RS'].includes(e.type)
         );
         if (coilIdx === -1) {
           return { ...r, elements: [...r.elements, newEl] };
@@ -479,7 +675,7 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
               id: `br-${Date.now()}`,
               type: 'NO',
               variable: branchVariable,
-              label: 'HOLD_LATCH',
+              label: 'RETENCION',
             },
           ],
         };
@@ -492,74 +688,48 @@ export const usePLCStore = create<PLCStoreState>((set, get) => ({
   syncLadderToST: () => {
     const st = generateSTFromLadder(get().rungs, get().symbols);
     set({ stCode: st, language: 'ST' });
-    get().addLog('INFO', 'Diagrama Ladder transpilado a código IEC 61131-3 Structured Text (ST).');
+    get().addLog('INFO', 'Diagrama Ladder transpilado a Structured Text (ST).');
   },
 
   compileProgram: () => {
     const state = get();
     const diags: CompileDiagnostic[] = [];
 
-    if (state.language === 'LD') {
+    if (state.language === 'ST') {
+      diags.push(...validateSTCode(state.stCode));
+    } else {
       state.rungs.forEach((r) => {
         if (r.elements.length === 0) {
           diags.push({
             rung: r.number,
             severity: 'warning',
-            message: `Rung #${r.number}: Rung vacío sin contactos ni bobinas.`,
-          });
-          return;
-        }
-        const hasCoil = r.elements.some(
-          (e) => e.type === 'COIL' || e.type === 'SET' || e.type === 'RESET'
-        );
-        if (!hasCoil) {
-          diags.push({
-            rung: r.number,
-            severity: 'error',
-            message: `Rung #${r.number}: Falta bobina de salida (COIL, SET o RESET) en el extremo derecho.`,
+            message: `Rung #${r.number}: Rung vacío.`,
           });
         }
       });
-    } else {
-      diags.push(...validateSTCode(state.stCode));
     }
 
     if (diags.length === 0) {
       diags.push({
         severity: 'info',
-        message: `Compilación IEC 61131-3 exitosa (0 errores). Binario virtual listo para KinCony KC868-A16.`,
+        message: 'Compilación IEC 61131-3 completada sin errores (0 errores).',
       });
     }
 
     set({ diagnostics: diags });
-    const hasErrors = diags.some((d) => d.severity === 'error');
-    get().addLog(
-      hasErrors ? 'ERROR' : 'INFO',
-      hasErrors
-        ? `Compilación fallida con ${diags.filter((d) => d.severity === 'error').length} error(es).`
-        : 'Compilación verificada correctamente. HAL I2C PCF8574 vinculada.'
-    );
-    return !hasErrors;
+    return !diags.some((d) => d.severity === 'error');
   },
 
   updateHwConfig: (patch) =>
     set({ hwConfig: { ...get().hwConfig, ...patch } }),
 
-  setHwConnected: (connected) => {
-    set({ hwConnected: connected });
-    get().addLog(
-      'WS',
-      connected
-        ? `Conectado en tiempo real a placa KinCony KC868-A16 (${get().hwConfig.transport.toUpperCase()}).`
-        : 'Enlace hardware con placa KinCony KC868-A16 desconectado.'
-    );
-  },
+  setHwConnected: (connected) => set({ hwConnected: connected }),
 
   applyHardwareTelemetry: (ix, qx, iw) => {
     set({
       inputs: ix.slice(0, 16).map(Boolean),
       outputs: qx.slice(0, 16).map(Boolean),
-      ...(iw ? { analogs: iw.slice(0, 4) } : {}),
+      ...(iw ? { analogs: iw.slice(0, 8) } : {}),
     });
   },
 

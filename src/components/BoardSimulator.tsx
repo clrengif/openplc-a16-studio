@@ -9,6 +9,7 @@ import {
   Hand,
   Activity,
   Unplug,
+  Thermometer,
 } from 'lucide-react';
 import { usePLCStore } from '../store/usePLCStore';
 import { indexToIECAddress } from '../utils/defaultProgram';
@@ -35,21 +36,20 @@ export const BoardSimulator: React.FC = () => {
   const [showHwConfig, setShowHwConfig] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Calculate the active-low 8-bit register values on the 4 PCF8574 I2C expanders (0 = ON, 1 = OFF)
   const calcPcfByteHex = (bits: boolean[], offset: number): string => {
     let byteVal = 0xff;
     for (let b = 0; b < 8; b++) {
       if (bits[offset + b]) {
-        byteVal &= ~(1 << b); // Active low on KC868-A16 PCF8574
+        byteVal &= ~(1 << b);
       }
     }
     return '0x' + byteVal.toString(16).toUpperCase().padStart(2, '0');
   };
 
-  const pcfIn1Hex = calcPcfByteHex(inputs, 0);   // 0x22 (DI1..DI8)
-  const pcfIn2Hex = calcPcfByteHex(inputs, 8);   // 0x21 (DI9..DI16)
-  const pcfOut1Hex = calcPcfByteHex(outputs, 0); // 0x24 (DO1..DO8)
-  const pcfOut2Hex = calcPcfByteHex(outputs, 8); // 0x25 (DO9..DO16)
+  const pcfIn1Hex = calcPcfByteHex(inputs, 0);
+  const pcfIn2Hex = calcPcfByteHex(inputs, 8);
+  const pcfOut1Hex = calcPcfByteHex(outputs, 0);
+  const pcfOut2Hex = calcPcfByteHex(outputs, 8);
 
   const getTag = (addr: string) =>
     symbols.find((s) => s.address.toUpperCase() === addr.toUpperCase())?.name;
@@ -66,11 +66,9 @@ export const BoardSimulator: React.FC = () => {
 
     if (hwConfig.transport === 'websocket') {
       try {
-        addLog('WS', `Intentando conexión WebSocket a ${hwConfig.wsUrl}...`);
+        addLog('WS', `Conectando WebSocket a ${hwConfig.wsUrl}...`);
         const ws = new WebSocket(hwConfig.wsUrl);
-        ws.onopen = () => {
-          setHwConnected(true);
-        };
+        ws.onopen = () => setHwConnected(true);
         ws.onmessage = (ev) => {
           try {
             const data = JSON.parse(String(ev.data));
@@ -78,108 +76,101 @@ export const BoardSimulator: React.FC = () => {
               applyHardwareTelemetry(data.ix, data.qx, data.iw);
             }
           } catch {
-            // Ignore malformed frame
+            // ignore
           }
         };
         ws.onerror = () => {
-          addLog(
-            'WARN',
-            `No se detectó servidor WebSocket en ${hwConfig.wsUrl}. Continuando en modo Simulador Virtual KC868-A16.`
-          );
+          addLog('WARN', `Sin respuesta en ${hwConfig.wsUrl}. Continuando en Simulador Virtual.`);
           setHwConnected(false);
         };
-        ws.onclose = () => {
-          setHwConnected(false);
-        };
+        ws.onclose = () => setHwConnected(false);
         wsRef.current = ws;
       } catch {
         addLog('ERROR', 'URL WebSocket inválida.');
       }
     } else {
-      // Web Serial API connection to USB-C CH340 on KinCony KC868-A16
       const nav = navigator as unknown as {
         serial?: { requestPort: () => Promise<{ open: (opts: { baudRate: number }) => Promise<void> }> };
       };
       if (!nav.serial) {
-        addLog('WARN', 'Web Serial API requiere Chrome/Edge de escritorio. Usando simulador virtual.');
+        addLog('WARN', 'Web Serial API requiere Chrome o Edge.');
         return;
       }
       try {
         const port = await nav.serial.requestPort();
         await port.open({ baudRate: 115200 });
         setHwConnected(true);
-        addLog('WS', 'Puerto USB-Serial CH340 (115200 bps) abierto con KinCony KC868-A16.');
       } catch {
-        addLog('WARN', 'Selección de puerto USB-Serial cancelada por el usuario.');
+        addLog('WARN', 'Conexión USB Serial cancelada.');
       }
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 border-l border-slate-800 select-none overflow-y-auto">
-      {/* Board Header */}
-      <div className="px-3.5 py-2.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+    <div className="flex flex-col h-full bg-[#f4f6f8] border-l border-slate-300 select-none overflow-y-auto">
+      {/* Header */}
+      <div className="px-3.5 py-2 bg-[#f8fafc] border-b border-slate-300 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+          <div className="p-1.5 rounded bg-[#0f766e]/10 border border-[#0f766e]/30 text-[#0f766e]">
             <Cpu className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-100">
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900">
                 KinCony KC868-A16
               </h2>
-              <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-slate-800 text-emerald-300 border border-slate-700">
+              <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-teal-50 text-[#0f766e] border border-teal-200 font-semibold">
                 ESP32 + 4×PCF8574
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 font-mono">
-              SDA=GPIO{hwConfig.i2cSdaPin} · SCL=GPIO{hwConfig.i2cSclPin} · LAN8720 ETH
+            <p className="text-[10px] text-slate-500 font-mono">
+              I²C (GPIO 4/5) · LAN8720 ETH · RS485 (GPIO 16/13)
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           <button
             onClick={() => setShowHwConfig(!showHwConfig)}
-            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] text-slate-300 cursor-pointer"
+            className="px-2 py-1 rounded bg-white hover:bg-slate-100 border border-slate-300 text-[11px] font-medium text-slate-700 cursor-pointer"
           >
-            Red / I2C
+            Red
           </button>
           <button
             onClick={handleConnectHardware}
             className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1 border cursor-pointer transition-colors ${
               hwConnected
-                ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
-                : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
+                ? 'bg-[#0f766e] border-[#0f766e] text-white'
+                : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800'
             }`}
           >
             {hwConnected ? (
               <>
-                <Unplug className="w-3.5 h-3.5 text-emerald-400" />
+                <Unplug className="w-3 h-3" />
                 <span>Online</span>
               </>
             ) : (
               <>
-                <Wifi className="w-3.5 h-3.5 text-sky-400" />
-                <span>Conectar Placa</span>
+                <Wifi className="w-3 h-3 text-[#0f766e]" />
+                <span>Conectar</span>
               </>
             )}
           </button>
         </div>
       </div>
 
-      {/* Collapsible Hardware Link & I2C Config */}
+      {/* Collapsible Network & Hardware Config */}
       {showHwConfig && (
-        <div className="p-3 bg-slate-900/90 border-b border-slate-800 space-y-2 text-xs">
+        <div className="p-3 bg-white border-b border-slate-300 space-y-2 text-xs">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-300">Enlace Físico ESP32 (OpenPLC HAL)</span>
+            <span className="font-semibold text-slate-700">Enlace Hardware KC868-A16</span>
             <div className="flex gap-1">
               <button
                 onClick={() => updateHwConfig({ transport: 'websocket' })}
                 className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 cursor-pointer ${
                   hwConfig.transport === 'websocket'
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-slate-800 text-slate-400'
+                    ? 'bg-[#0f766e] text-white'
+                    : 'bg-slate-100 text-slate-600'
                 }`}
               >
                 <Wifi className="w-3 h-3" /> WebSocket
@@ -188,127 +179,80 @@ export const BoardSimulator: React.FC = () => {
                 onClick={() => updateHwConfig({ transport: 'serial' })}
                 className={`px-2 py-0.5 rounded text-[11px] flex items-center gap-1 cursor-pointer ${
                   hwConfig.transport === 'serial'
-                    ? 'bg-sky-600 text-white'
-                    : 'bg-slate-800 text-slate-400'
+                    ? 'bg-[#0f766e] text-white'
+                    : 'bg-slate-100 text-slate-600'
                 }`}
               >
-                <Usb className="w-3 h-3" /> USB Serial (CH340)
+                <Usb className="w-3 h-3" /> USB CH340
               </button>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-0.5 text-[11px] text-slate-400">
-              <span>WebSocket URL (ESP32):</span>
+            <label className="flex flex-col gap-0.5 text-[11px] text-slate-600">
+              <span>WebSocket ESP32:</span>
               <input
                 type="text"
                 value={hwConfig.wsUrl}
                 onChange={(e) => updateHwConfig({ wsUrl: e.target.value })}
-                className="px-2 py-1 rounded bg-slate-950 border border-slate-700 text-slate-200 font-mono"
+                className="px-2 py-1 rounded bg-slate-50 border border-slate-300 text-slate-800 font-mono"
               />
             </label>
-            <label className="flex flex-col gap-0.5 text-[11px] text-slate-400">
-              <span>Modbus TCP IP (Puerto 502):</span>
+            <label className="flex flex-col gap-0.5 text-[11px] text-slate-600">
+              <span>IP Modbus TCP (502):</span>
               <input
                 type="text"
                 value={hwConfig.modbusIp}
                 onChange={(e) => updateHwConfig({ modbusIp: e.target.value })}
-                className="px-2 py-1 rounded bg-slate-950 border border-slate-700 text-slate-200 font-mono"
+                className="px-2 py-1 rounded bg-slate-50 border border-slate-300 text-slate-800 font-mono"
               />
             </label>
           </div>
         </div>
       )}
 
-      <div className="p-3.5 space-y-4">
+      <div className="p-3 space-y-3">
         {/* Live I2C PCF8574 Bus Register Monitor */}
-        <div className="rounded-lg bg-slate-900/90 border border-slate-800 p-2.5">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-sky-400" />
-              Bus I2C PCF8574 (Lógica Activa-Baja: 0=ON, 1=OFF)
+        <div className="rounded-lg bg-white border border-slate-300 p-2.5 shadow-2xs">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-[#0f766e]" />
+              Registros Bus I²C PCF8574 (Activo-Bajo: 0=ON)
             </span>
             <span className="text-[10px] font-mono text-slate-500">400 kHz</span>
           </div>
           <div className="grid grid-cols-4 gap-1.5 text-center font-mono text-xs">
-            <div className="p-1.5 rounded bg-slate-950 border border-slate-800">
-              <div className="text-[10px] text-slate-400">DI1..8 ({hwConfig.pcfIn1Addr})</div>
-              <div className="text-emerald-400 font-bold mt-0.5">{pcfIn1Hex}</div>
+            <div className="p-1.5 rounded bg-slate-50 border border-slate-200">
+              <div className="text-[10px] text-slate-500">DI1..8 ({hwConfig.pcfIn1Addr})</div>
+              <div className="text-[#0f766e] font-bold mt-0.5">{pcfIn1Hex}</div>
             </div>
-            <div className="p-1.5 rounded bg-slate-950 border border-slate-800">
-              <div className="text-[10px] text-slate-400">DI9..16 ({hwConfig.pcfIn2Addr})</div>
-              <div className="text-emerald-400 font-bold mt-0.5">{pcfIn2Hex}</div>
+            <div className="p-1.5 rounded bg-slate-50 border border-slate-200">
+              <div className="text-[10px] text-slate-500">DI9..16 ({hwConfig.pcfIn2Addr})</div>
+              <div className="text-[#0f766e] font-bold mt-0.5">{pcfIn2Hex}</div>
             </div>
-            <div className="p-1.5 rounded bg-slate-950 border border-slate-800">
-              <div className="text-[10px] text-slate-400">DO1..8 ({hwConfig.pcfOut1Addr})</div>
-              <div className="text-amber-400 font-bold mt-0.5">{pcfOut1Hex}</div>
+            <div className="p-1.5 rounded bg-slate-50 border border-slate-200">
+              <div className="text-[10px] text-slate-500">DO1..8 ({hwConfig.pcfOut1Addr})</div>
+              <div className="text-amber-700 font-bold mt-0.5">{pcfOut1Hex}</div>
             </div>
-            <div className="p-1.5 rounded bg-slate-950 border border-slate-800">
-              <div className="text-[10px] text-slate-400">DO9..16 ({hwConfig.pcfOut2Addr})</div>
-              <div className="text-amber-400 font-bold mt-0.5">{pcfOut2Hex}</div>
+            <div className="p-1.5 rounded bg-slate-50 border border-slate-200">
+              <div className="text-[10px] text-slate-500">DO9..16 ({hwConfig.pcfOut2Addr})</div>
+              <div className="text-amber-700 font-bold mt-0.5">{pcfOut2Hex}</div>
             </div>
-          </div>
-        </div>
-
-        {/* 16 Relay / MOSFET Outputs (%QX0.0 .. %QX1.7) */}
-        <div className="rounded-xl bg-[#0b2319] border-2 border-emerald-800/70 p-3 shadow-inner">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-200 flex items-center gap-1.5">
-              <Radio className="w-3.5 h-3.5 text-amber-400" />
-              16 Salidas Digitales Relé / MOSFET (%QX0.0 – %QX1.7)
-            </span>
-            <span className="text-[10px] font-mono text-emerald-300/80">
-              {outputs.filter(Boolean).length}/16 Activas
-            </span>
-          </div>
-
-          <div className="grid grid-cols-4 gap-2">
-            {outputs.map((active, idx) => {
-              const iecAddr = indexToIECAddress('%QX', idx);
-              const tag = getTag(iecAddr);
-              return (
-                <div
-                  key={iecAddr}
-                  className={`rounded-md p-2 border transition-all flex flex-col justify-between ${
-                    active
-                      ? 'bg-amber-500/20 border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
-                      : 'bg-slate-950/75 border-emerald-900/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono font-bold text-slate-200">
-                      DO{idx + 1}
-                    </span>
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full transition-all ${
-                        active
-                          ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]'
-                          : 'bg-slate-800 border border-slate-700'
-                      }`}
-                    />
-                  </div>
-                  <div className="text-[10px] font-mono text-amber-300/90 mt-0.5">{iecAddr}</div>
-                  <div className="text-[9px] text-slate-400 truncate mt-0.5" title={tag}>
-                    {tag || '—'}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
 
         {/* 16 Opto-Isolated Digital Inputs (%IX0.0 .. %IX1.7) */}
-        <div className="rounded-xl bg-[#0b2319] border-2 border-emerald-800/70 p-3 shadow-inner">
+        <div className="rounded-lg bg-white border border-slate-300 p-2.5 shadow-2xs">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-200">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800">
               16 Entradas Optoacopladas (%IX0.0 – %IX1.7)
             </span>
-            <span className="text-[10px] text-emerald-300/80">
-              Clic = Activar · Icono = Pulsador / Interruptor
+            <span className="text-[10px] text-slate-500">
+              Modbus 10001–10016
             </span>
           </div>
 
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-1.5">
             {inputs.map((active, idx) => {
               const iecAddr = indexToIECAddress('%IX', idx);
               const isMomentary = momentaryMask[idx];
@@ -317,14 +261,14 @@ export const BoardSimulator: React.FC = () => {
               return (
                 <div
                   key={iecAddr}
-                  className={`rounded-md p-2 border transition-all flex flex-col justify-between ${
+                  className={`rounded p-1.5 border transition-all flex flex-col justify-between ${
                     active
-                      ? 'bg-emerald-500/25 border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.35)]'
-                      : 'bg-slate-950/80 border-emerald-900/60 hover:border-emerald-700'
+                      ? 'bg-[#ccfbf1]/70 border-[#0f766e]'
+                      : 'bg-slate-50/80 border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-mono font-bold text-slate-200">
+                    <span className="text-[10px] font-mono font-bold text-slate-700">
                       DI{idx + 1}
                     </span>
                     <button
@@ -332,17 +276,13 @@ export const BoardSimulator: React.FC = () => {
                         e.stopPropagation();
                         toggleMomentaryMode(idx);
                       }}
-                      title={
-                        isMomentary
-                          ? 'Modo Pulsador Momentáneo (Mantener presionado)'
-                          : 'Modo Interruptor Mantenido (Clic alterna ON/OFF)'
-                      }
-                      className="p-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+                      title={isMomentary ? 'Pulsador Momentáneo' : 'Interruptor Mantenido'}
+                      className="p-0.5 rounded hover:bg-slate-200 text-slate-500 cursor-pointer"
                     >
                       {isMomentary ? (
-                        <Hand className="w-3 h-3 text-sky-400" />
+                        <Hand className="w-3 h-3 text-sky-700" />
                       ) : (
-                        <ToggleLeft className="w-3 h-3 text-emerald-400" />
+                        <ToggleLeft className="w-3 h-3 text-[#0f766e]" />
                       )}
                     </button>
                   </div>
@@ -360,15 +300,15 @@ export const BoardSimulator: React.FC = () => {
                     }}
                     className={`w-full py-1 rounded text-[11px] font-mono font-bold transition-colors cursor-pointer ${
                       active
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-800'
+                        ? 'bg-[#0f766e] text-white'
+                        : 'bg-white hover:bg-teal-50 text-slate-800 border border-slate-300'
                     }`}
                   >
                     {iecAddr}
                   </button>
 
-                  <div className="text-[9px] text-slate-400 truncate mt-1" title={tag}>
-                    {tag || (isMomentary ? 'Pulsador NA' : 'Interruptor')}
+                  <div className="text-[9px] text-slate-500 truncate mt-0.5" title={tag}>
+                    {tag || (isMomentary ? 'Pulsador' : 'Switch')}
                   </div>
                 </div>
               );
@@ -376,28 +316,82 @@ export const BoardSimulator: React.FC = () => {
           </div>
         </div>
 
-        {/* 4 Analog Inputs A1..A4 (ADC1 GPIO 36, 39, 34, 35) */}
-        <div className="rounded-lg bg-slate-900/90 border border-slate-800 p-3">
+        {/* 16 Relay / MOSFET Outputs (%QX0.0 .. %QX1.7) */}
+        <div className="rounded-lg bg-white border border-slate-300 p-2.5 shadow-2xs">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-              <Gauge className="w-3.5 h-3.5 text-cyan-400" />
-              Entradas Analógicas KC868-A16 (%IW0 – %IW3 · 12-bit ADC)
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+              <Radio className="w-3.5 h-3.5 text-[#ea580c]" />
+              16 Salidas MOSFET / Relé (%QX0.0 – %QX1.7)
+            </span>
+            <span className="text-[10px] font-mono text-slate-500">
+              Modbus 00001–00016 · {outputs.filter(Boolean).length}/16 ON
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            {analogs.map((val, ch) => {
+
+          <div className="grid grid-cols-4 gap-1.5">
+            {outputs.map((active, idx) => {
+              const iecAddr = indexToIECAddress('%QX', idx);
+              const tag = getTag(iecAddr);
+              return (
+                <div
+                  key={iecAddr}
+                  className={`rounded p-1.5 border transition-all flex flex-col justify-between ${
+                    active
+                      ? 'bg-amber-50 border-amber-500 shadow-2xs'
+                      : 'bg-slate-50/80 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-slate-700">
+                      DO{idx + 1}
+                    </span>
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        active
+                          ? 'bg-[#ea580c] shadow-[0_0_6px_#ea580c]'
+                          : 'bg-slate-300'
+                      }`}
+                    />
+                  </div>
+                  <div
+                    className={`text-[10px] font-mono font-bold mt-0.5 ${
+                      active ? 'text-amber-800' : 'text-slate-600'
+                    }`}
+                  >
+                    {iecAddr}
+                  </div>
+                  <div className="text-[9px] text-slate-500 truncate" title={tag}>
+                    {tag || '—'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 4 Analog Inputs A1..A4 + 1-Wire Sensors HT1..HT3 */}
+        <div className="rounded-lg bg-white border border-slate-300 p-2.5 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+              <Gauge className="w-3.5 h-3.5 text-[#0f766e]" />
+              Analógicas A1–A4 (%IW0..3) & 1-Wire HT1–HT3 (%IW4..6)
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[0, 1, 2, 3].map((ch) => {
+              const val = analogs[ch] ?? 0;
               const pins = [36, 39, 34, 35];
               const volts = ((val / 4095) * 5).toFixed(2);
               return (
                 <div
                   key={ch}
-                  className="p-2 rounded bg-slate-950 border border-slate-800 flex flex-col gap-1"
+                  className="p-1.5 rounded bg-slate-50 border border-slate-200 flex flex-col gap-1"
                 >
-                  <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-cyan-300 font-bold">
-                      A{ch + 1} (%IW{ch} · GPIO{pins[ch]})
+                  <div className="flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-slate-800 font-bold">
+                      A{ch + 1} (%IW{ch}·G{pins[ch]})
                     </span>
-                    <span className="text-slate-300">
+                    <span className="text-[#0f766e] font-bold">
                       {val} ({volts}V)
                     </span>
                   </div>
@@ -407,11 +401,32 @@ export const BoardSimulator: React.FC = () => {
                     max={4095}
                     value={val}
                     onChange={(e) => setAnalogChannel(ch, Number(e.target.value))}
-                    className="w-full accent-cyan-400 cursor-pointer h-1.5"
+                    className="w-full accent-[#0f766e] cursor-pointer h-1.5"
                   />
                 </div>
               );
             })}
+          </div>
+
+          {/* 1-Wire DS18B20 / DHT22 Sensor Simulator */}
+          <div className="pt-1.5 border-t border-slate-200 flex items-center justify-between gap-2 text-[11px]">
+            <span className="flex items-center gap-1 font-medium text-slate-700">
+              <Thermometer className="w-3.5 h-3.5 text-[#ea580c]" />
+              HT1 DS18B20 (%IW4 · GPIO32):
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={1000}
+                value={analogs[4] ?? 245}
+                onChange={(e) => setAnalogChannel(4, Number(e.target.value))}
+                className="w-24 accent-[#ea580c] cursor-pointer h-1.5"
+              />
+              <span className="font-mono font-bold text-[#ea580c] w-14 text-right">
+                {((analogs[4] ?? 245) / 10).toFixed(1)} °C
+              </span>
+            </div>
           </div>
         </div>
       </div>

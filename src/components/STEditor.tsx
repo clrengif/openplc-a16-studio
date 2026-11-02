@@ -1,55 +1,54 @@
 import React from 'react';
 import Editor from '@monaco-editor/react';
-import { CheckCircle2, Sparkles, RotateCcw, FileCode2 } from 'lucide-react';
+import { CheckCircle2, RotateCcw, FileCode2 } from 'lucide-react';
 import { usePLCStore } from '../store/usePLCStore';
 import { DEFAULT_ST_CODE } from '../utils/defaultProgram';
 
 const ST_SNIPPETS = [
   {
-    label: '+ Enclavamiento Marcha/Paro',
+    label: '+ Enclavamiento',
     code: '\n(* Enclavamiento Marcha / Paro *)\n%QX0.0 := (%IX0.0 OR %QX0.0) AND NOT %IX0.1;\n',
   },
   {
     label: '+ Temporizador TON',
-    code: '\n(* Temporizador TON 2000ms *)\nT1(IN := %IX0.0, PT := T#2000ms);\n%QX0.4 := T1.Q;\n',
+    code: '\n(* Temporizador TON 2000ms *)\nT0(IN := %QX0.0, PT := T#2000ms);\n%QX0.1 := T0.Q;\n',
   },
   {
     label: '+ Contador CTU',
-    code: '\n(* Contador Ascendente CTU *)\nC1(CU := %IX0.2, R := %IX0.3, PV := 10);\n%QX0.5 := C1.Q;\n',
+    code: '\n(* Contador Ascendente CTU *)\nC0(CU := %IX0.2, R := %IX0.3, PV := 5);\n%QX0.2 := C0.Q;\n%MW0 := C0.CV;\n',
   },
   {
-    label: '+ Bloque IF / ELSE',
-    code: '\nIF %IX0.4 THEN\n  %QX0.3 := TRUE;\nELSIF %IX0.5 THEN\n  %QX0.3 := FALSE;\nEND_IF;\n',
+    label: '+ Comparador Analógico %IW0',
+    code: '\n(* Alarma Sobrepresión ADC1 GPIO36 *)\nIF %IW0 > 2800 THEN\n  %QX0.4 := TRUE;\nELSE\n  %QX0.4 := FALSE;\nEND_IF;\n',
   },
 ];
 
 export const STEditor: React.FC = () => {
-  const { stCode, setSTCode, compileProgram, inputs, outputs, timers, counters } = usePLCStore();
+  const { stCode, setSTCode, compileProgram, inputs, outputs, analogs, words } = usePLCStore();
 
   const insertSnippet = (snippet: string) => {
     const idx = stCode.lastIndexOf('END_PROGRAM');
     if (idx !== -1) {
-      const updated = stCode.slice(0, idx) + snippet + '\n' + stCode.slice(idx);
-      setSTCode(updated);
+      setSTCode(stCode.slice(0, idx) + snippet + '\n' + stCode.slice(idx));
     } else {
       setSTCode(stCode + '\n' + snippet);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-900/90 border-b border-slate-800">
+    <div className="flex flex-col h-full bg-white overflow-hidden">
+      {/* Light Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-[#f8fafc] border-b border-slate-300">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="flex items-center gap-1 text-xs font-semibold text-indigo-300 mr-2">
-            <FileCode2 className="w-4 h-4 text-indigo-400" />
+          <span className="flex items-center gap-1 text-xs font-bold text-[#0f766e] mr-2">
+            <FileCode2 className="w-4 h-4" />
             IEC 61131-3 Structured Text (ST)
           </span>
           {ST_SNIPPETS.map((s) => (
             <button
               key={s.label}
               onClick={() => insertSnippet(s.code)}
-              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-mono text-slate-200 transition-colors cursor-pointer"
+              className="px-2 py-0.5 rounded bg-white hover:bg-teal-50 border border-slate-300 text-[11px] font-mono text-slate-700 cursor-pointer"
             >
               {s.label}
             </button>
@@ -59,68 +58,61 @@ export const STEditor: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setSTCode(DEFAULT_ST_CODE)}
-            className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs flex items-center gap-1 cursor-pointer"
-            title="Restaurar programa ST industrial por defecto"
+            className="px-2.5 py-1 rounded bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs flex items-center gap-1 cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Restaurar Ejemplo</span>
+            <span>Restaurar</span>
           </button>
           <button
             onClick={compileProgram}
-            className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-semibold text-xs flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1 rounded bg-[#0f766e] hover:bg-[#115e59] text-white font-semibold text-xs flex items-center gap-1 cursor-pointer"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Validar Sintaxis ST</span>
+            <span>Validar ST</span>
           </button>
         </div>
       </div>
 
       {/* Live Inline Telemetry Strip */}
-      <div className="flex items-center gap-3 px-3 py-1.5 bg-slate-900/50 border-b border-slate-800/80 overflow-x-auto text-[11px] font-mono">
-        <span className="flex items-center gap-1 text-slate-400">
-          <Sparkles className="w-3 h-3 text-amber-400" />
-          Estado en Vivo:
-        </span>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
+      <div className="flex items-center gap-2 px-3 py-1 bg-[#f1f5f9] border-b border-slate-200 overflow-x-auto text-[11px] font-mono">
+        <span className="text-slate-500 font-sans font-medium">Memoria en vivo:</span>
+        {[0, 1, 2, 3].map((i) => (
           <span
             key={`ix-${i}`}
             className={`px-1.5 py-0.5 rounded border ${
               inputs[i]
-                ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-300'
-                : 'bg-slate-900 border-slate-800 text-slate-500'
+                ? 'bg-[#ccfbf1] border-[#0f766e] text-[#0f766e] font-bold'
+                : 'bg-white border-slate-300 text-slate-500'
             }`}
           >
             %IX0.{i}={inputs[i] ? '1' : '0'}
           </span>
         ))}
-        <span className="text-slate-700">|</span>
-        {[0, 1, 2, 3].map((i) => (
+        {[0, 1, 2, 4].map((i) => (
           <span
             key={`qx-${i}`}
             className={`px-1.5 py-0.5 rounded border ${
               outputs[i]
-                ? 'bg-amber-950/70 border-amber-500/60 text-amber-300'
-                : 'bg-slate-900 border-slate-800 text-slate-500'
+                ? 'bg-amber-100 border-amber-500 text-amber-900 font-bold'
+                : 'bg-white border-slate-300 text-slate-500'
             }`}
           >
             %QX0.{i}={outputs[i] ? '1' : '0'}
           </span>
         ))}
-        <span className="text-slate-700">|</span>
-        <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-300">
-          T0.ET={Math.round(timers.T0?.ET ?? 0)}ms (Q={timers.T0?.Q ? '1' : '0'})
+        <span className="px-1.5 py-0.5 rounded bg-white border border-slate-300 text-indigo-800">
+          %IW0(A1)={analogs[0]}
         </span>
-        <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-purple-300">
-          C0.CV={counters.C0?.CV ?? 0}/{counters.C0?.PV ?? 5}
+        <span className="px-1.5 py-0.5 rounded bg-white border border-slate-300 text-teal-800">
+          %MW0(40001)={words[0]}
         </span>
       </div>
 
-      {/* Monaco Editor */}
       <div className="flex-1">
         <Editor
           height="100%"
           defaultLanguage="pascal"
-          theme="vs-dark"
+          theme="light"
           value={stCode}
           onChange={(val) => setSTCode(val ?? '')}
           options={{
@@ -131,7 +123,7 @@ export const STEditor: React.FC = () => {
             scrollBeyondLastLine: false,
             automaticLayout: true,
             tabSize: 2,
-            padding: { top: 12 },
+            padding: { top: 10 },
           }}
         />
       </div>
