@@ -84,4 +84,19 @@ export interface CompilationResult {
   generatedST?: string;
   generatedCpp?: string;
   generatedXml?: string;
+  generatedOpenPlcHal?: string;
+}
+
+export interface KinConyHardwareConfig {
+  transport: 'websocket' | 'serial';
+  wsUrl: string;         // e.g. 'ws://192.168.1.50:81'
+  modbusIp: string;      // e.g. '192.168.1.50'
+  modbusPort: number;    // 502
+  useEthernet: boolean;  // LAN8720 RMII vs WiFi
+  i2cSdaPin: number;     // GPIO 4
+  i2cSclPin: number;     // GPIO 5
+  pcfIn1Addr: string;    // '0x22' (DI1..DI8)
+  pcfIn2Addr: string;    // '0x21' (DI9..DI16)
+  pcfOut1Addr: string;   // '0x24' (DO1..DO8)
+  pcfOut2Addr: string;   // '0x25' (DO9..DO16)
 }
